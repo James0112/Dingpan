@@ -37,7 +37,7 @@ jobs:
           RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
           STOCK_CODE: ${{ vars.STOCK_CODE }}
           STOCK_NAME: ${{ vars.STOCK_NAME }}
-          COST_PRICE: ${{ vars.COST_PRICE }}
+          COST_PRICE: ${{ secrets.COST_PRICE }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           GEMINI_FALLBACK_MODEL: ${{ vars.GEMINI_FALLBACK_MODEL }}
 
