@@ -1,0 +1,51 @@
+name: DingPan Daily Report
+
+on:
+  schedule:
+    - cron: "0 0 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      send_email:
+        description: "Send the email instead of dry-run preview"
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.send_email && 'false' || 'true') || 'false' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate report
+        run: python main.py
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          QQ_EMAIL: ${{ secrets.QQ_EMAIL }}
+          QQ_EMAIL_AUTH_CODE: ${{ secrets.QQ_EMAIL_AUTH_CODE }}
+          RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
+          STOCK_CODE: ${{ vars.STOCK_CODE }}
+          STOCK_NAME: ${{ vars.STOCK_NAME }}
+          COST_PRICE: ${{ vars.COST_PRICE }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          GEMINI_FALLBACK_MODEL: ${{ vars.GEMINI_FALLBACK_MODEL }}
+
+      - name: Upload rendered HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ github.run_id }}
+          path: output/*.html
+          if-no-files-found: ignore
+          retention-days: 7

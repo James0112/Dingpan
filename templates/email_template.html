@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>盯盘侠 · 每日早报</title>
+</head>
+<body style="margin:0;padding:0;background-color:#111122;font-family:'PingFang SC','Microsoft YaHei','Helvetica Neue',Arial,sans-serif;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#111122" style="background-color:#111122;">
+  <tr>
+    <td align="center" style="padding:24px 0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" bgcolor="#1a1a2e" style="background-color:#1a1a2e;border:1px solid #2a2a4a;">
+        <tr>
+          <td bgcolor="#0f3460" style="background-color:#0f3460;padding:28px 32px 24px 32px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td style="font-size:11px;letter-spacing:3px;color:#8bc5ff;font-weight:700;">DINGPAN · 每日早报</td>
+                <td align="right" style="font-size:12px;color:#c4d2e7;">{{ date }}</td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding-top:12px;">
+                  <span style="font-size:22px;font-weight:700;color:#ffffff;">盯盘侠</span>
+                  <span style="font-size:14px;color:#c4d2e7;padding-left:8px;">{{ stock_name }} · {{ stock_code }}</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td bgcolor="#16213e" style="background-color:#16213e;padding:24px 32px;border-bottom:1px solid #2a2a4a;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td valign="bottom">
+                  <span style="font-size:36px;font-weight:800;color:#ffffff;line-height:1;">{{ close_price }}</span>
+                  <span style="font-size:13px;color:#8ea3bf;padding-left:6px;">CNY</span>
+                </td>
+                <td align="right" valign="bottom">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td bgcolor="{{ change_bg_color }}" style="background-color:{{ change_bg_color }};padding:6px 14px;">
+                        <span style="font-size:18px;font-weight:700;color:#ffffff;">{{ change_arrow }}{{ change_pct }}%</span>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding-top:16px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                    <tr>
+                      <td width="25%" align="center" style="padding:8px 0;border-right:1px solid #2a2a4a;">
+                        <div style="font-size:11px;color:#8ea3bf;padding-bottom:4px;">开盘</div>
+                        <div style="font-size:14px;color:#e0e0e0;font-weight:600;">{{ open_price }}</div>
+                      </td>
+                      <td width="25%" align="center" style="padding:8px 0;border-right:1px solid #2a2a4a;">
+                        <div style="font-size:11px;color:#8ea3bf;padding-bottom:4px;">最高</div>
+                        <div style="font-size:14px;color:#ff4757;font-weight:600;">{{ high_price }}</div>
+                      </td>
+                      <td width="25%" align="center" style="padding:8px 0;border-right:1px solid #2a2a4a;">
+                        <div style="font-size:11px;color:#8ea3bf;padding-bottom:4px;">最低</div>
+                        <div style="font-size:14px;color:#2ed573;font-weight:600;">{{ low_price }}</div>
+                      </td>
+                      <td width="25%" align="center" style="padding:8px 0;">
+                        <div style="font-size:11px;color:#8ea3bf;padding-bottom:4px;">成交额</div>
+                        <div style="font-size:14px;color:#e0e0e0;font-weight:600;">{{ amount }}万</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:12px 32px;background-color:#1a1a2e;border-bottom:1px solid #2a2a4a;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td>
+                  <span style="font-size:12px;color:#8ea3bf;">持仓成本</span>
+                  <span style="font-size:14px;color:#ffa502;font-weight:700;padding-left:8px;">¥{{ cost_price }}</span>
+                </td>
+                <td align="right">
+                  <span style="font-size:12px;color:#8ea3bf;">浮动盈亏</span>
+                  <span style="font-size:14px;color:{{ pnl_color }};font-weight:700;padding-left:8px;">{{ pnl_pct }}</span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 32px 20px 32px;border-bottom:1px solid #2a2a4a;">
+            <div style="font-size:15px;font-weight:700;color:#ffffff;padding-bottom:14px;">核心结论</div>
+            <div style="font-size:14px;color:#e0e0e0;line-height:1.8;">{{ executive_summary }}</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 32px 20px 32px;border-bottom:1px solid #2a2a4a;">
+            <div style="font-size:15px;font-weight:700;color:#ffffff;padding-bottom:14px;">行情回顾</div>
+            <div style="font-size:14px;color:#c8d6e5;line-height:1.7;">{{ section_review }}</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 32px 20px 32px;border-bottom:1px solid #2a2a4a;">
+            <div style="font-size:15px;font-weight:700;color:#ffffff;padding-bottom:14px;">技术信号</div>
+            {% for signal in technical_signals %}
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td width="12" valign="top" style="padding-top:7px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr><td width="6" height="6" bgcolor="#5dade2" style="background-color:#5dade2;font-size:0;line-height:0;">&nbsp;</td></tr>
+                  </table>
+                </td>
+                <td style="padding:0 0 10px 10px;font-size:14px;color:#c8d6e5;line-height:1.6;">{{ signal }}</td>
+              </tr>
+            </table>
+            {% endfor %}
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 32px 20px 32px;border-bottom:1px solid #2a2a4a;">
+            <div style="font-size:15px;font-weight:700;color:#ffffff;padding-bottom:14px;">技术结构分析</div>
+            <div style="font-size:14px;color:#c8d6e5;line-height:1.8;">{{ technical_analysis }}</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 32px 20px 32px;border-bottom:1px solid #2a2a4a;">
+            <div style="font-size:15px;font-weight:700;color:#ffffff;padding-bottom:14px;">资金动向</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="#0f1a2e" style="background-color:#0f1a2e;">
+              <tr>
+                <td width="33%" align="center" style="padding:14px 16px;border-right:1px solid #2a2a4a;">
+                  <div style="font-size:11px;color:#8ea3bf;padding-bottom:6px;">主力净流入</div>
+                  <div style="font-size:18px;font-weight:800;color:{{ main_flow_color }};">{{ main_flow }}万</div>
+                </td>
+                <td width="34%" align="center" style="padding:14px 16px;border-right:1px solid #2a2a4a;">
+                  <div style="font-size:11px;color:#8ea3bf;padding-bottom:6px;">超大单</div>
+                  <div style="font-size:14px;font-weight:600;color:{{ xl_flow_color }};">{{ xl_flow }}万</div>
+                </td>
+                <td width="33%" align="center" style="padding:14px 16px;">
+                  <div style="font-size:11px;color:#8ea3bf;padding-bottom:6px;">小单</div>
+                  <div style="font-size:14px;font-weight:600;color:{{ sm_flow_color }};">{{ sm_flow }}万</div>
+                </td>
+              </tr>
+            </table>
+            <div style="font-size:14px;color:#c8d6e5;line-height:1.7;padding-top:14px;">{{ section_fund_flow }}</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 32px 20px 32px;border-bottom:1px solid #2a2a4a;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td style="font-size:15px;font-weight:700;color:#ffffff;padding-bottom:14px;">新闻速递</td>
+                <td align="right" style="padding-bottom:14px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td bgcolor="{{ news_badge_color }}" style="background-color:{{ news_badge_color }};padding:4px 10px;">
+                        <span style="font-size:12px;font-weight:700;color:#ffffff;">{{ news_badge_text }}</span>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+            {% if news_list %}
+              {% for news in news_list[:5] %}
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td width="72" valign="top" style="font-size:12px;color:#8ea3bf;padding:0 8px 10px 0;">{{ news.published_at.strftime('%m-%d %H:%M') }}</td>
+                  <td valign="top" style="font-size:13px;color:#e0e0e0;line-height:1.6;padding-bottom:10px;">{{ news.title }}</td>
+                </tr>
+              </table>
+              {% endfor %}
+            {% else %}
+              <div style="font-size:13px;color:#a0a0a0;line-height:1.6;padding-bottom:10px;">暂无相关新闻</div>
+            {% endif %}
+            <div style="font-size:14px;color:#c8d6e5;line-height:1.7;padding-top:6px;">{{ news_impact }}</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 32px 20px 32px;border-bottom:1px solid #2a2a4a;">
+            <div style="font-size:15px;font-weight:700;color:#ffffff;padding-bottom:14px;">成本视角分析</div>
+            <div style="font-size:14px;color:#c8d6e5;line-height:1.8;">{{ cost_analysis }}</div>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:24px 32px 24px 32px;">
+            <div style="font-size:15px;font-weight:700;color:#ffffff;padding-bottom:14px;">操作建议</div>
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="{{ advice_bg }}" style="background-color:{{ advice_bg }};">
+              <tr>
+                <td width="4" bgcolor="{{ advice_border_color }}" style="background-color:{{ advice_border_color }};">&nbsp;</td>
+                <td style="padding:18px 20px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td bgcolor="{{ advice_border_color }}" style="background-color:{{ advice_border_color }};padding:3px 12px;">
+                        <span style="font-size:13px;font-weight:700;color:#ffffff;">{{ advice_direction }}</span>
+                      </td>
+                    </tr>
+                  </table>
+                  <div style="font-size:14px;color:#e0e0e0;line-height:1.7;padding:14px 0;">{{ section_advice }}</div>
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td style="padding-right:12px;">
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                          <tr>
+                            <td bgcolor="#1a2d1a" style="background-color:#1a2d1a;border:1px solid #2ed573;padding:4px 12px;">
+                              <span style="font-size:11px;color:#8ea3bf;">支撑</span>
+                              <span style="font-size:13px;color:#2ed573;font-weight:700;padding-left:6px;">{{ support_price }}</span>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                      <td>
+                        <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                          <tr>
+                            <td bgcolor="#2d1a1a" style="background-color:#2d1a1a;border:1px solid #ff4757;padding:4px 12px;">
+                              <span style="font-size:11px;color:#8ea3bf;">压力</span>
+                              <span style="font-size:13px;color:#ff4757;font-weight:700;padding-left:6px;">{{ resistance_price }}</span>
+                            </td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="padding:0 32px 24px 32px;">
+            <div style="font-size:15px;font-weight:700;color:#ffffff;padding-bottom:14px;">风险提示</div>
+            {% for note in risk_notes %}
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td width="12" valign="top" style="padding-top:7px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr><td width="6" height="6" bgcolor="#ffa502" style="background-color:#ffa502;font-size:0;line-height:0;">&nbsp;</td></tr>
+                  </table>
+                </td>
+                <td style="padding:0 0 10px 10px;font-size:14px;color:#c8d6e5;line-height:1.6;">{{ note }}</td>
+              </tr>
+            </table>
+            {% endfor %}
+          </td>
+        </tr>
+
+        <tr>
+          <td bgcolor="#111122" style="background-color:#111122;padding:20px 32px 24px 32px;border-top:1px solid #2a2a4a;">
+            <div style="font-size:11px;color:#666666;line-height:1.6;">
+              数据来源：东方财富 · 分析引擎：Gemini<br>
+              本报告由「盯盘侠」自动生成，仅供参考，不构成投资建议<br>
+              持仓成本：¥{{ cost_price }} | 生成时间：{{ generated_at }}
+            </div>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

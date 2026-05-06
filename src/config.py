@@ -1,0 +1,96 @@
+from __future__ import annotations
+
+import os
+from dataclasses import dataclass
+from pathlib import Path
+
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+TEMPLATE_DIR = BASE_DIR / "templates"
+OUTPUT_DIR = BASE_DIR / "output"
+ENV_FILE = BASE_DIR / ".env"
+
+
+@dataclass(frozen=True)
+class Settings:
+    stock_code: str = "603212"
+    stock_name: str = ""
+    cost_price: float = 0.0
+    model_name: str = "gemini-3-flash-preview"
+    fallback_model_name: str = "gemini-2.5-flash-lite"
+    timezone_name: str = "Asia/Shanghai"
+    smtp_host: str = "smtp.qq.com"
+    smtp_port: int = 465
+    max_news_items: int = 8
+    news_lookback_hours: int = 48
+    enable_grounding: bool = False
+    disable_proxy: bool = True
+    dry_run: bool = False
+    output_dir: Path = OUTPUT_DIR
+    template_path: Path = TEMPLATE_DIR / "email_template.html"
+    gemini_api_key: str | None = None
+    qq_email: str | None = None
+    qq_email_auth_code: str | None = None
+    receiver_emails: tuple[str, ...] = ()
+
+
+def _parse_bool(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _env_or_default(key: str, default: str) -> str:
+    value = os.getenv(key)
+    if value is None or not value.strip():
+        return default
+    return value
+
+
+def _parse_csv(value: str | None) -> tuple[str, ...]:
+    if not value:
+        return ()
+    items = []
+    for chunk in value.replace(";", ",").split(","):
+        item = chunk.strip()
+        if item:
+            items.append(item)
+    return tuple(items)
+
+
+def load_dotenv_file() -> None:
+    if not ENV_FILE.exists():
+        return
+    for raw_line in ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("'").strip('"')
+        os.environ.setdefault(key, value)
+
+
+def load_settings() -> Settings:
+    load_dotenv_file()
+    return Settings(
+        stock_code=_env_or_default("STOCK_CODE", "603212"),
+        stock_name=os.getenv("STOCK_NAME", ""),
+        cost_price=float(_env_or_default("COST_PRICE", "0")),
+        model_name=_env_or_default("GEMINI_MODEL", "gemini-3-flash-preview"),
+        fallback_model_name=_env_or_default("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash-lite"),
+        timezone_name=_env_or_default("TZ_NAME", "Asia/Shanghai"),
+        smtp_host=_env_or_default("SMTP_HOST", "smtp.qq.com"),
+        smtp_port=int(_env_or_default("SMTP_PORT", "465")),
+        max_news_items=int(_env_or_default("MAX_NEWS_ITEMS", "8")),
+        news_lookback_hours=int(_env_or_default("NEWS_LOOKBACK_HOURS", "48")),
+        enable_grounding=_parse_bool(os.getenv("ENABLE_GROUNDING"), False),
+        disable_proxy=_parse_bool(os.getenv("DISABLE_PROXY"), True),
+        dry_run=_parse_bool(os.getenv("DRY_RUN"), False),
+        output_dir=OUTPUT_DIR,
+        template_path=TEMPLATE_DIR / "email_template.html",
+        gemini_api_key=os.getenv("GEMINI_API_KEY"),
+        qq_email=os.getenv("QQ_EMAIL"),
+        qq_email_auth_code=os.getenv("QQ_EMAIL_AUTH_CODE"),
+        receiver_emails=_parse_csv(os.getenv("RECEIVER_EMAIL")),
+    )
