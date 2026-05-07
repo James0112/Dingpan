@@ -110,6 +110,13 @@ async def page_user_or_redirect(request: Request):
     return user
 
 
+def _preferred_app_name(request: Request) -> str:
+    accept_language = request.headers.get("accept-language", "").lower()
+    if "zh" in accept_language:
+        return "盯盘侠"
+    return "DingPan"
+
+
 @app.on_event("startup")
 async def startup_event() -> None:
     await init_db(settings.db_path)
@@ -118,6 +125,43 @@ async def startup_event() -> None:
 @app.get("/sw.js")
 async def service_worker() -> FileResponse:
     return FileResponse(static_dir / "sw.js", media_type="application/javascript")
+
+
+@app.get("/manifest.webmanifest")
+async def web_manifest(request: Request) -> JSONResponse:
+    app_name = _preferred_app_name(request)
+    return JSONResponse(
+        {
+            "id": "/",
+            "name": app_name,
+            "short_name": app_name,
+            "description": "多用户股票日报与 Web Push 提醒服务。",
+            "lang": "zh-CN" if app_name == "盯盘侠" else "en",
+            "dir": "ltr",
+            "start_url": "/dashboard",
+            "scope": "/",
+            "display": "standalone",
+            "orientation": "portrait",
+            "background_color": "#0a0a1a",
+            "theme_color": "#0f3460",
+            "icons": [
+                {
+                    "src": "/static/icons/icon-192.png",
+                    "sizes": "192x192",
+                    "type": "image/png",
+                    "purpose": "any maskable",
+                },
+                {
+                    "src": "/static/icons/icon-512.png",
+                    "sizes": "512x512",
+                    "type": "image/png",
+                    "purpose": "any maskable",
+                },
+            ],
+        },
+        media_type="application/manifest+json",
+        headers={"Vary": "Accept-Language"},
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
