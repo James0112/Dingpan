@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import smtplib
+from datetime import datetime
 from email.header import Header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import format_datetime
+from zoneinfo import ZoneInfo
 
 
 class EmailSendError(RuntimeError):
@@ -26,6 +29,7 @@ def send_email(
     message["Subject"] = Header(subject, "utf-8")
     message["From"] = sender_email
     message["To"] = ", ".join(receiver_emails)
+    message["Date"] = format_datetime(datetime.now(ZoneInfo("Asia/Shanghai")))
     message.attach(MIMEText(html_content, "html", "utf-8"))
 
     last_error: Exception | None = None
