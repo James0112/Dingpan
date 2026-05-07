@@ -23,6 +23,7 @@ class AuthUser:
     preferred_model: str
     points_balance: int
     email_verified_at: str
+    daily_email_enabled: bool
     daily_push_time: str
     push_timezone: str
     last_daily_push_trade_date: str
@@ -104,7 +105,7 @@ async def get_optional_user(request: Request, db_path: str, jwt_secret: str) -> 
     row = await fetch_one(
         db_path,
         """
-        SELECT id, email, preferred_model, points_balance, email_verified_at, daily_push_time, push_timezone, last_daily_push_trade_date
+        SELECT id, email, preferred_model, points_balance, email_verified_at, daily_email_enabled, daily_push_time, push_timezone, last_daily_push_trade_date
         FROM users
         WHERE id = ? AND is_active = 1
         """,
@@ -118,6 +119,7 @@ async def get_optional_user(request: Request, db_path: str, jwt_secret: str) -> 
         preferred_model=str(row["preferred_model"]),
         points_balance=int(row["points_balance"]),
         email_verified_at=str(row["email_verified_at"]),
+        daily_email_enabled=bool(int(row["daily_email_enabled"])),
         daily_push_time=str(row["daily_push_time"]),
         push_timezone=str(row["push_timezone"]),
         last_daily_push_trade_date=str(row["last_daily_push_trade_date"]),

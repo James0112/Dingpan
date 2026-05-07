@@ -173,13 +173,21 @@
       color: var(--orange);
     }
     .install-banner {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      z-index: 40;
       display: grid;
       gap: 10px;
-      margin-bottom: 18px;
+      max-width: 920px;
+      margin: 0 auto;
       padding: 14px 16px;
       border: 1px solid rgba(93, 173, 226, 0.28);
-      border-radius: 16px;
-      background: linear-gradient(135deg, rgba(15, 52, 96, 0.6), rgba(17, 17, 34, 0.9));
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(15, 52, 96, 0.92), rgba(17, 17, 34, 0.97));
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(12px);
     }
     .install-banner[hidden] {
       display: none;
@@ -194,6 +202,12 @@
       .shell { padding: 16px 12px 64px; }
       .nav { flex-direction: column; align-items: stretch; }
       .nav-links { justify-content: space-between; width: 100%; }
+      .install-banner {
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        border-radius: 16px;
+      }
     }
   </style>
 </head>
@@ -221,7 +235,8 @@
     </div>
     <section class="install-banner" id="install-banner" hidden>
       <p data-install-text>安装到桌面后，可从独立应用窗口打开并单独开启推送。</p>
-      <div class="row">
+      <div class="row" style="justify-content:flex-end;">
+        <button class="secondary" id="install-dismiss-button" type="button">不再提示</button>
         <button class="secondary" id="install-button" type="button">安装应用</button>
       </div>
     </section>

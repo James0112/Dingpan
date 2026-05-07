@@ -124,6 +124,6 @@ def render_email(
         generated_at=generated_at.strftime("%Y-%m-%d %H:%M:%S %Z"),
     )
 
-    html_path = output_dir / f"dingpan_report_{market_data.latest_trade_date:%Y%m%d}.html"
+    html_path = output_dir / f"dingpan_report_{market_data.latest_trade_date:%Y%m%d}_{market_data.stock_code}.html"
     html_path.write_text(html, encoding="utf-8")
     return subject, html_path, html

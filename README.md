@@ -11,7 +11,7 @@
 - 本地计算 MA5/MA10/MA20、MACD、量能状态
 - Gemini 2.5 Flash 输出结构化 JSON 分析
 - Jinja2 渲染深色 HTML 邮件
-- QQ 邮箱 SMTP 发送
+- Resend API 发送认证邮件与报告邮件
 - SQLite 持久化用户、订阅、共享分析缓存、Push 订阅
 - FastAPI SSR 页面：登录、注册、Dashboard、报告页
 - Web Push 订阅、测试推送、按用户设定时间发送通知
@@ -22,6 +22,7 @@
 dingpan/
 ├── app.py
 ├── generate.py
+├── send_reports.py
 ├── send_push.py
 ├── scripts/generate_vapid_keys.py
 ├── .github/workflows/daily.yml
@@ -45,12 +46,13 @@ pip install -r requirements.txt
 
 ```bash
 GEMINI_API_KEY=your_gemini_api_key
-QQ_EMAIL=your_sender@qq.com
-QQ_EMAIL_AUTH_CODE=your_qq_smtp_auth_code
 RECEIVER_EMAIL=your_receiver@example.com
 JWT_SECRET=change-this-in-production
 SITE_URL=http://127.0.0.1:8000
 DB_PATH=data/dingpan.db
+RESEND_API_KEY=re_xxxxxxxx
+MAIL_FROM_AUTH=auth@mail.manuflow.net
+MAIL_FROM_REPORTS=reports@mail.manuflow.net
 ```
 
 程序启动时会自动加载 `.env`，如果系统环境变量和 `.env` 同时存在，优先使用系统环境变量。
@@ -59,11 +61,12 @@ DB_PATH=data/dingpan.db
 
 ```bash
 export GEMINI_API_KEY="your_gemini_api_key"
-export QQ_EMAIL="your_sender@qq.com"
-export QQ_EMAIL_AUTH_CODE="your_qq_smtp_auth_code"
 export RECEIVER_EMAIL="first@example.com,second@example.com"
 export JWT_SECRET="change-this-in-production"
 export SITE_URL="http://127.0.0.1:8000"
+export RESEND_API_KEY="re_xxxxxxxx"
+export MAIL_FROM_AUTH="auth@mail.manuflow.net"
+export MAIL_FROM_REPORTS="reports@mail.manuflow.net"
 ```
 
 可选变量：
@@ -188,12 +191,37 @@ python send_push.py --date 2026-05-07
 - 但需要外部调度器定时执行 `send_push.py`
 - 例如每 5 分钟执行一次，脚本内部会判断哪些用户此刻到点、且当天还没推过
 
+8. 多用户每日报告邮件：
+
+- 认证邮件和报告邮件都通过 Resend 发送
+- 用户在 Settings 页面开启“每日报告邮件”后，系统会使用注册邮箱接收日报
+- 邮件发送时间与当前 `daily_push_time` 共用
+
+手动派发：
+
+```bash
+python send_reports.py
+```
+
+仅查看当前时间窗口会命中哪些用户/股票：
+
+```bash
+python send_reports.py --dry-run
+```
+
+指定交易日：
+
+```bash
+python send_reports.py --date 2026-05-08
+```
+
 ## 部署建议
 
 线上最小部署建议：
 
 - 1 个 `uvicorn` / `gunicorn+uvicorn` Web 进程
 - 1 个定时任务执行 `generate.py`
+- 1 个定时任务执行 `send_reports.py`
 - 1 个定时任务执行 `send_push.py`
 - Nginx 反向代理并启用 HTTPS
 
@@ -211,6 +239,12 @@ python send_push.py --date 2026-05-07
 */5 * * * * cd /path/to/dingpan && /path/to/.venv/bin/python send_push.py >> logs/send_push.log 2>&1
 ```
 
+日报邮件：
+
+```cron
+*/5 * * * * cd /path/to/dingpan && /path/to/.venv/bin/python send_reports.py >> logs/send_reports.log 2>&1
+```
+
 说明：
 - `generate.py` 的频率按你对行情更新的需求调整
 - `send_push.py` 建议每 5 分钟跑一次
@@ -222,8 +256,7 @@ python send_push.py --date 2026-05-07
 
 Secrets:
 - `GEMINI_API_KEY`
-- `QQ_EMAIL`
-- `QQ_EMAIL_AUTH_CODE`
+- `RESEND_API_KEY`
 - `RECEIVER_EMAIL`
 
 Variables:
@@ -235,7 +268,7 @@ Variables:
 
 这样仓库代码里不需要暴露你的股票、持仓成本和收件人信息，后续即使公开仓库也不会泄漏这些配置。
 
-然后确认 QQ 邮箱已经开启 SMTP 服务，并拿到授权码。工作流会在北京时间工作日 08:00 左右运行。你也可以在 GitHub 仓库的 `Actions` 页面手动触发：
+然后确认 Resend 已验证 `mail.manuflow.net` 域名，并配置了 `MAIL_FROM_REPORTS`。工作流会在北京时间工作日 08:00 左右运行。你也可以在 GitHub 仓库的 `Actions` 页面手动触发：
 
 - 默认 `send_email = false`，只生成 HTML artifact，适合在线测试
 - 勾选 `send_email = true`，则手动触发时直接发邮件
@@ -244,8 +277,8 @@ Variables:
 ## 部署前你需要准备的内容
 
 - 一个可用的 Gemini API Key
-- 一个开启了 SMTP 的 QQ 邮箱
-- QQ 邮箱授权码
+- 一个已在 Resend 验证通过的发信域
+- Resend API Key
 - 一个或多个接收日报的邮箱地址，逗号分隔
 - 股票代码、股票名称、持仓成本，建议只放 `.env` 或 GitHub Variables
 

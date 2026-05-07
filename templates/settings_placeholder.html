@@ -41,6 +41,29 @@
         <button type="submit">更新密码</button>
       </form>
     </div>
+    <div class="card">
+      <p class="section-title">邮件通知</p>
+      <form class="stack" id="email-preferences-form">
+        <label class="row" style="justify-content:space-between;align-items:center;">
+          <span>
+            <span style="display:block;font-weight:700;">每日报告邮件</span>
+            <span class="muted" style="display:block;margin-top:6px;">使用注册邮箱接收已订阅股票的日报邮件。发送时间与推送时间保持一致。</span>
+          </span>
+          <input
+            id="daily_email_enabled"
+            name="daily_email_enabled"
+            type="checkbox"
+            {% if user.daily_email_enabled %}checked{% endif %}
+            {% if not user.email_verified_at %}disabled{% endif %}
+          >
+        </label>
+        {% if not user.email_verified_at %}
+        <div class="muted">请先验证邮箱，验证通过后才能开启每日报告邮件。</div>
+        {% endif %}
+        <div class="message" id="email-message"></div>
+        <button type="submit" {% if not user.email_verified_at %}disabled{% endif %}>保存邮件设置</button>
+      </form>
+    </div>
     <div>
       <div class="muted">模型配置</div>
       <div class="list" style="margin-top:12px;">
@@ -59,6 +82,8 @@
   const verificationMessage = document.getElementById("verification-message");
   const changePasswordForm = document.getElementById("change-password-form");
   const passwordMessage = document.getElementById("password-message");
+  const emailPreferencesForm = document.getElementById("email-preferences-form");
+  const emailMessage = document.getElementById("email-message");
 
   if (resendVerificationButton) {
     resendVerificationButton.addEventListener("click", async () => {
@@ -97,5 +122,26 @@
     passwordMessage.textContent = data.message || "密码已更新";
     changePasswordForm.reset();
   });
+
+  if (emailPreferencesForm) {
+    emailPreferencesForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      emailMessage.textContent = "正在保存邮件设置...";
+      const response = await fetch("/api/email/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          daily_email_enabled: emailPreferencesForm.daily_email_enabled.checked
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        emailMessage.textContent = data.detail || "保存失败";
+        return;
+      }
+      emailPreferencesForm.daily_email_enabled.checked = Boolean(data.daily_email_enabled);
+      emailMessage.textContent = data.message || "邮件设置已更新";
+    });
+  }
 </script>
 {% endblock %}

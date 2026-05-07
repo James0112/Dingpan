@@ -26,8 +26,6 @@ class Settings:
     model_name: str = "gemini-3-flash-preview"
     fallback_model_name: str = "gemini-2.5-flash-lite"
     timezone_name: str = "Asia/Shanghai"
-    smtp_host: str = "smtp.qq.com"
-    smtp_port: int = 465
     max_news_items: int = 8
     news_lookback_hours: int = 48
     enable_grounding: bool = False
@@ -36,8 +34,6 @@ class Settings:
     output_dir: Path = OUTPUT_DIR
     template_path: Path = TEMPLATE_DIR / "email_template.html"
     gemini_api_key: str | None = None
-    qq_email: str | None = None
-    qq_email_auth_code: str | None = None
     receiver_emails: tuple[str, ...] = ()
     resend_api_key: str | None = None
     mail_from_auth: str | None = None
@@ -97,8 +93,6 @@ def load_settings() -> Settings:
         model_name=_env_or_default("GEMINI_MODEL", "gemini-3-flash-preview"),
         fallback_model_name=_env_or_default("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash-lite"),
         timezone_name=_env_or_default("TZ_NAME", "Asia/Shanghai"),
-        smtp_host=_env_or_default("SMTP_HOST", "smtp.qq.com"),
-        smtp_port=int(_env_or_default("SMTP_PORT", "465")),
         max_news_items=int(_env_or_default("MAX_NEWS_ITEMS", "8")),
         news_lookback_hours=int(_env_or_default("NEWS_LOOKBACK_HOURS", "48")),
         enable_grounding=_parse_bool(os.getenv("ENABLE_GROUNDING"), False),
@@ -107,8 +101,6 @@ def load_settings() -> Settings:
         output_dir=OUTPUT_DIR,
         template_path=TEMPLATE_DIR / "email_template.html",
         gemini_api_key=os.getenv("GEMINI_API_KEY"),
-        qq_email=os.getenv("QQ_EMAIL"),
-        qq_email_auth_code=os.getenv("QQ_EMAIL_AUTH_CODE"),
         receiver_emails=_parse_csv(os.getenv("RECEIVER_EMAIL")),
         resend_api_key=os.getenv("RESEND_API_KEY"),
         mail_from_auth=os.getenv("MAIL_FROM_AUTH"),

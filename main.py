@@ -13,8 +13,8 @@ from src.cost_engine import generate_cost_analysis
 from src.fetch_data import DataFetchError, fetch_market_data
 from src.fetch_news import fetch_news
 from src.logger import configure_logging
+from src.mailer import MailerError, send_report_email
 from src.render_email import render_email
-from src.send_email import EmailSendError, send_email
 from src.trading_calendar import (
     TradingCalendarError,
     fallback_latest_trade_date,
@@ -147,19 +147,27 @@ def main() -> int:
                 logger.warning("Failed to open preview automatically: %s", exc)
         return 0
 
+    if not settings.receiver_emails:
+        logger.error("No report receiver emails configured. Set RECEIVER_EMAIL.")
+        return 1
+
+    text_content = (
+        f"{subject}\n\n"
+        f"查看 HTML 报告附件预览文件：{html_path.name}\n"
+        "当前邮件为 HTML 正文发送，请在支持 HTML 的邮箱中查看完整内容。"
+    )
     try:
-        send_email(
-            smtp_host=settings.smtp_host,
-            smtp_port=settings.smtp_port,
-            sender_email=settings.qq_email or "",
-            sender_auth_code=settings.qq_email_auth_code or "",
+        send_report_email(
+            api_key=settings.resend_api_key,
+            from_email=settings.mail_from_reports,
             receiver_emails=list(settings.receiver_emails),
             subject=subject,
-            html_content=html_content,
+            html=html_content,
+            text=text_content,
         )
         logger.info("Email sent successfully to %s", ", ".join(settings.receiver_emails))
         return 0
-    except EmailSendError as exc:
+    except MailerError as exc:
         logger.error("Email send failed: %s", exc)
         return 1
 

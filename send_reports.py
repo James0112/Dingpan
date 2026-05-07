@@ -4,16 +4,17 @@ import argparse
 import asyncio
 import sys
 from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 from src.config import load_settings
 from src.database import init_db
 from src.logger import configure_logging
-from src.push import (
-    PushError,
-    load_due_push_users,
-    load_user_latest_report_target,
-    mark_daily_push_sent,
-    send_push_to_user,
+from src.mailer import (
+    MailerError,
+    load_due_email_users,
+    load_user_email_targets,
+    mark_daily_report_delivered,
+    send_daily_report_for_target,
 )
 from src.trading_calendar import (
     TradingCalendarError,
@@ -27,10 +28,10 @@ from src.trading_calendar import (
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Dispatch scheduled DingPan daily report push notifications")
+    parser = argparse.ArgumentParser(description="Dispatch scheduled DingPan daily report emails")
     parser.add_argument("--date", dest="trade_date", help="Trade date in YYYY-MM-DD format")
     parser.add_argument("--window-minutes", type=int, default=10, help="Delivery window size per user local time")
-    parser.add_argument("--dry-run", action="store_true", help="Resolve due users without sending notifications")
+    parser.add_argument("--dry-run", action="store_true", help="Resolve due users without sending emails")
     return parser.parse_args()
 
 
@@ -59,69 +60,68 @@ async def run() -> int:
     trade_date_text = trade_date_value.isoformat()
     now_utc = datetime.now(timezone.utc)
 
-    due_users = await load_due_push_users(
+    due_users = await load_due_email_users(
         settings.db_path,
         now_utc=now_utc,
         window_minutes=args.window_minutes,
         trade_date=trade_date_text,
     )
-    logger.info("Resolved %s due users for trade_date=%s", len(due_users), trade_date_text)
+    logger.info("Resolved %s due email users for trade_date=%s", len(due_users), trade_date_text)
     if not due_users:
         return 0
+
+    if not args.dry_run and (not settings.resend_api_key or not settings.mail_from_reports):
+        logger.error("Resend report email configuration is incomplete")
+        return 1
 
     sent_count = 0
     failed_count = 0
     for due_user in due_users:
-        report_target = await load_user_latest_report_target(
+        targets = await load_user_email_targets(
             settings.db_path,
             user_id=due_user.user_id,
             trade_date=trade_date_text,
         )
-        if report_target is None:
-            logger.info("Skip user %s: no active report target for %s", due_user.email, trade_date_text)
+        if not targets:
+            logger.info("Skip user %s: no unsent report targets for %s", due_user.email, trade_date_text)
             continue
-
-        report_url = (
-            f"{settings.site_url.rstrip('/')}/report/"
-            f"{report_target['stock_code']}/{trade_date_text}"
-        )
-        payload = {
-            "title": "盯盘侠日报已生成",
-            "body": f"{report_target['stock_name'] or report_target['stock_code']} {trade_date_text} 的日报已可查看。",
-            "url": report_url,
-        }
         logger.info(
-            "Dispatch push to %s at %s %s for %s",
+            "Dispatch %s report email(s) to %s at %s %s",
+            len(targets),
             due_user.email,
             due_user.daily_push_time,
             due_user.push_timezone,
-            report_target["stock_code"],
         )
         if args.dry_run:
-            sent_count += 1
+            sent_count += len(targets)
             continue
-        try:
-            delivered = await send_push_to_user(
-                settings.db_path,
-                user_id=due_user.user_id,
-                payload=payload,
-                public_key=settings.vapid_public_key,
-                private_key=settings.vapid_private_key,
-                claims_email=settings.vapid_claims_email,
-            )
-            await mark_daily_push_sent(
-                settings.db_path,
-                user_id=due_user.user_id,
-                trade_date=trade_date_text,
-                sent_at_iso=now_utc.isoformat(),
-            )
-            logger.info("Push delivered to %s device(s) for user %s", delivered, due_user.email)
-            sent_count += 1
-        except PushError as exc:
-            logger.error("Push failed for user %s: %s", due_user.email, exc)
-            failed_count += 1
+        now_local = now_utc.astimezone(ZoneInfo(due_user.push_timezone))
+        for target in targets:
+            try:
+                stock_code = await asyncio.to_thread(
+                    send_daily_report_for_target,
+                    api_key=settings.resend_api_key,
+                    from_email=settings.mail_from_reports,
+                    receiver_email=due_user.email,
+                    output_dir=settings.output_dir,
+                    template_path=settings.template_path,
+                    target=target,
+                    trade_date_text=trade_date_text,
+                    now_local=now_local,
+                )
+                await mark_daily_report_delivered(
+                    settings.db_path,
+                    user_id=due_user.user_id,
+                    stock_code=stock_code,
+                    trade_date=trade_date_text,
+                    sent_at_iso=now_utc.isoformat(),
+                )
+                sent_count += 1
+            except MailerError as exc:
+                logger.error("Report email failed for user %s stock %s: %s", due_user.email, target["stock_code"], exc)
+                failed_count += 1
 
-    logger.info("Scheduled push dispatch completed: sent=%s failed=%s", sent_count, failed_count)
+    logger.info("Scheduled report email dispatch completed: sent=%s failed=%s", sent_count, failed_count)
     return 0 if failed_count == 0 else 1
 
 

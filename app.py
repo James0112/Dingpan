@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
@@ -73,6 +73,10 @@ class ResetPasswordPayload(BaseModel):
 class ChangePasswordPayload(BaseModel):
     current_password: str = Field(min_length=8, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class EmailPreferencesPayload(BaseModel):
+    daily_email_enabled: bool
 
 
 class SubscriptionCreatePayload(BaseModel):
@@ -162,7 +166,7 @@ def _client_host(request: Request) -> str:
 
 
 def _check_rate_limit(scope: str, key: str, *, max_attempts: int, window_seconds: int) -> None:
-    now = datetime.now(UTC).timestamp()
+    now = datetime.now(timezone.utc).timestamp()
     bucket_key = f"{scope}:{key}"
     timestamps = [item for item in RATE_LIMIT_BUCKETS[bucket_key] if now - item < window_seconds]
     if len(timestamps) >= max_attempts:
@@ -186,7 +190,7 @@ async def _email_send_allowed(user_id: int, token_type: str, *, cooldown_seconds
     if row is None or not row["created_at"]:
         return True
     created_at = datetime.fromisoformat(str(row["created_at"]).replace(" ", "T"))
-    return (datetime.now(UTC) - created_at.replace(tzinfo=UTC)).total_seconds() >= cooldown_seconds
+    return (datetime.now(timezone.utc) - created_at.replace(tzinfo=timezone.utc)).total_seconds() >= cooldown_seconds
 
 
 async def _issue_email_token(user_id: int, token_type: str, expires_at: datetime) -> str:
@@ -196,7 +200,7 @@ async def _issue_email_token(user_id: int, token_type: str, expires_at: datetime
     try:
         await conn.execute(
             "UPDATE email_tokens SET used_at = ? WHERE user_id = ? AND token_type = ? AND used_at IS NULL",
-            (datetime.now(UTC).isoformat(), user_id, token_type),
+            (datetime.now(timezone.utc).isoformat(), user_id, token_type),
         )
         await conn.execute(
             """
@@ -230,11 +234,11 @@ async def _consume_email_token(token: str, token_type: str) -> int | None:
         if row is None or row["used_at"]:
             return None
         expires_at = datetime.fromisoformat(str(row["expires_at"]))
-        if expires_at < datetime.now(UTC):
+        if expires_at < datetime.now(timezone.utc):
             return None
         await conn.execute(
             "UPDATE email_tokens SET used_at = ? WHERE id = ?",
-            (datetime.now(UTC).isoformat(), int(row["id"])),
+            (datetime.now(timezone.utc).isoformat(), int(row["id"])),
         )
         await conn.commit()
         return int(row["user_id"])
@@ -250,7 +254,7 @@ async def _send_verification_email(user_id: int, email: str) -> None:
     token = await _issue_email_token(
         user_id,
         "verify_email",
-        datetime.now(UTC) + timedelta(hours=VERIFY_EMAIL_TOKEN_TTL_HOURS),
+        datetime.now(timezone.utc) + timedelta(hours=VERIFY_EMAIL_TOKEN_TTL_HOURS),
     )
     verify_url = f"{settings.site_url.rstrip('/')}/auth/verify-email?token={token}"
     html = render_template(
@@ -283,7 +287,7 @@ async def _send_password_reset_email(user_id: int, email: str) -> None:
     token = await _issue_email_token(
         user_id,
         "reset_password",
-        datetime.now(UTC) + timedelta(minutes=RESET_PASSWORD_TOKEN_TTL_MINUTES),
+        datetime.now(timezone.utc) + timedelta(minutes=RESET_PASSWORD_TOKEN_TTL_MINUTES),
     )
     reset_url = f"{settings.site_url.rstrip('/')}/reset-password?token={token}"
     html = render_template(
@@ -407,7 +411,7 @@ async def verify_email_page(request: Request, token: str = ""):
             await execute(
                 settings.db_path,
                 "UPDATE users SET email_verified_at = ? WHERE id = ? AND email_verified_at = ''",
-                (datetime.now(UTC).isoformat(), user_id),
+                (datetime.now(timezone.utc).isoformat(), user_id),
             )
             success = True
     return templates.TemplateResponse(
@@ -700,6 +704,7 @@ async def auth_me(user=Depends(current_user)):
         "points_balance": user.points_balance,
         "email_verified": bool(user.email_verified_at),
         "email_verified_at": user.email_verified_at,
+        "daily_email_enabled": user.daily_email_enabled,
         "daily_push_time": user.daily_push_time,
         "push_timezone": user.push_timezone,
         "last_daily_push_trade_date": user.last_daily_push_trade_date,
@@ -755,6 +760,18 @@ async def change_password(payload: ChangePasswordPayload, user=Depends(current_u
         (hash_password(payload.new_password), user.id),
     )
     return {"ok": True, "message": "密码已更新。"}
+
+
+@app.post("/api/email/preferences")
+async def update_email_preferences(payload: EmailPreferencesPayload, user=Depends(current_user)):
+    await execute(
+        settings.db_path,
+        "UPDATE users SET daily_email_enabled = ? WHERE id = ?",
+        (1 if payload.daily_email_enabled and user.email_verified_at else 0, user.id),
+    )
+    if payload.daily_email_enabled and not user.email_verified_at:
+        return {"ok": True, "message": "请先验证邮箱，验证后才能开启每日报告邮件。", "daily_email_enabled": False}
+    return {"ok": True, "message": "每日报告邮件设置已更新。", "daily_email_enabled": payload.daily_email_enabled}
 
 
 @app.get("/api/subscriptions")
