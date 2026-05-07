@@ -3,7 +3,7 @@
 {% block content %}
 <section class="card" style="max-width:520px;margin:0 auto;">
   <h1 style="margin:0 0 10px;">注册</h1>
-  <p class="muted" style="margin:0 0 20px;">Phase 1B 先开放基础账号系统，默认模型为 Gemini。</p>
+  <p class="muted" style="margin:0 0 20px;">注册后会先发送验证邮件。完成邮箱验证后，账户才能正常使用订阅、报告和推送功能。</p>
   <form class="stack" id="register-form">
     <div class="field">
       <label for="email">邮箱</label>
@@ -15,6 +15,7 @@
     </div>
     <div class="message" id="register-message"></div>
     <button type="submit">创建账户</button>
+    <a class="muted" href="/login">已有账号，直接登录</a>
   </form>
 </section>
 <script>
@@ -37,7 +38,8 @@
       message.textContent = data.detail || "注册失败";
       return;
     }
-    window.location.href = "/dashboard";
+    message.textContent = data.message || "验证邮件已发送，请先去邮箱完成验证。";
+    form.reset();
   });
 </script>
 {% endblock %}

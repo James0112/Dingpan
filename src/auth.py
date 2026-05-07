@@ -22,6 +22,7 @@ class AuthUser:
     email: str
     preferred_model: str
     points_balance: int
+    email_verified_at: str
     daily_push_time: str
     push_timezone: str
     last_daily_push_trade_date: str
@@ -42,6 +43,14 @@ def verify_password(password: str, stored_hash: str) -> bool:
     expected = base64.b64decode(digest_b64.encode())
     candidate = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=16384, r=8, p=1)
     return hmac.compare_digest(candidate, expected)
+
+
+def generate_one_time_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def hash_one_time_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def _b64url_encode(raw: bytes) -> str:
@@ -95,7 +104,7 @@ async def get_optional_user(request: Request, db_path: str, jwt_secret: str) -> 
     row = await fetch_one(
         db_path,
         """
-        SELECT id, email, preferred_model, points_balance, daily_push_time, push_timezone, last_daily_push_trade_date
+        SELECT id, email, preferred_model, points_balance, email_verified_at, daily_push_time, push_timezone, last_daily_push_trade_date
         FROM users
         WHERE id = ? AND is_active = 1
         """,
@@ -108,6 +117,7 @@ async def get_optional_user(request: Request, db_path: str, jwt_secret: str) -> 
         email=str(row["email"]),
         preferred_model=str(row["preferred_model"]),
         points_balance=int(row["points_balance"]),
+        email_verified_at=str(row["email_verified_at"]),
         daily_push_time=str(row["daily_push_time"]),
         push_timezone=str(row["push_timezone"]),
         last_daily_push_trade_date=str(row["last_daily_push_trade_date"]),

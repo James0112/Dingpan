@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import UTC, datetime, timedelta
+from collections import defaultdict
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -11,13 +14,16 @@ from pydantic import BaseModel, EmailStr, Field
 from src.auth import (
     SESSION_COOKIE_NAME,
     create_session_token,
+    generate_one_time_token,
     get_optional_user,
+    hash_one_time_token,
     hash_password,
     require_user,
     verify_password,
 )
 from src.config import load_settings
-from src.database import execute, fetch_all, fetch_one, init_db
+from src.database import connect, execute, fetch_all, fetch_one, init_db
+from src.mailer import MailerError, render_template, send_resend_email
 from src.push import (
     PushError,
     delete_push_subscription,
@@ -39,6 +45,10 @@ app = FastAPI(title="DingPan", version="0.1.0")
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
 static_dir = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+RATE_LIMIT_BUCKETS: dict[str, list[float]] = defaultdict(list)
+VERIFY_EMAIL_TOKEN_TTL_HOURS = 24
+RESET_PASSWORD_TOKEN_TTL_MINUTES = 60
+EMAIL_RESEND_INTERVAL_SECONDS = 60
 
 
 class RegisterPayload(BaseModel):
@@ -49,6 +59,20 @@ class RegisterPayload(BaseModel):
 class LoginPayload(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+
+
+class ForgotPasswordPayload(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordPayload(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class ChangePasswordPayload(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class SubscriptionCreatePayload(BaseModel):
@@ -99,6 +123,13 @@ async def current_user(request: Request):
     return await require_user(request, settings.db_path, settings.jwt_secret)
 
 
+async def verified_user(request: Request):
+    user = await require_user(request, settings.db_path, settings.jwt_secret)
+    if not user.email_verified_at:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Please verify your email first")
+    return user
+
+
 async def optional_user(request: Request):
     return await get_optional_user(request, settings.db_path, settings.jwt_secret)
 
@@ -115,6 +146,166 @@ def _preferred_app_name(request: Request) -> str:
     if "zh" in accept_language:
         return "盯盘侠"
     return "DingPan"
+
+
+def _template_context(request: Request, **extra: object) -> dict[str, object]:
+    return {"app_display_name": _preferred_app_name(request), **extra}
+
+
+def _require_mailer_config() -> None:
+    if not settings.resend_api_key or not settings.mail_from_auth:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Email service is not configured")
+
+
+def _client_host(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def _check_rate_limit(scope: str, key: str, *, max_attempts: int, window_seconds: int) -> None:
+    now = datetime.now(UTC).timestamp()
+    bucket_key = f"{scope}:{key}"
+    timestamps = [item for item in RATE_LIMIT_BUCKETS[bucket_key] if now - item < window_seconds]
+    if len(timestamps) >= max_attempts:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests, please try again later")
+    timestamps.append(now)
+    RATE_LIMIT_BUCKETS[bucket_key] = timestamps
+
+
+async def _email_send_allowed(user_id: int, token_type: str, *, cooldown_seconds: int = EMAIL_RESEND_INTERVAL_SECONDS) -> bool:
+    row = await fetch_one(
+        settings.db_path,
+        """
+        SELECT created_at
+        FROM email_tokens
+        WHERE user_id = ? AND token_type = ?
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        (user_id, token_type),
+    )
+    if row is None or not row["created_at"]:
+        return True
+    created_at = datetime.fromisoformat(str(row["created_at"]).replace(" ", "T"))
+    return (datetime.now(UTC) - created_at.replace(tzinfo=UTC)).total_seconds() >= cooldown_seconds
+
+
+async def _issue_email_token(user_id: int, token_type: str, expires_at: datetime) -> str:
+    token = generate_one_time_token()
+    token_hash = hash_one_time_token(token)
+    conn = await connect(settings.db_path)
+    try:
+        await conn.execute(
+            "UPDATE email_tokens SET used_at = ? WHERE user_id = ? AND token_type = ? AND used_at IS NULL",
+            (datetime.now(UTC).isoformat(), user_id, token_type),
+        )
+        await conn.execute(
+            """
+            INSERT INTO email_tokens (user_id, token_hash, token_type, expires_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (user_id, token_hash, token_type, expires_at.isoformat()),
+        )
+        await conn.commit()
+    finally:
+        await conn.close()
+    return token
+
+
+async def _consume_email_token(token: str, token_type: str) -> int | None:
+    token_hash = hash_one_time_token(token)
+    conn = await connect(settings.db_path)
+    try:
+        cursor = await conn.execute(
+            """
+            SELECT id, user_id, expires_at, used_at
+            FROM email_tokens
+            WHERE token_hash = ? AND token_type = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (token_hash, token_type),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+        if row is None or row["used_at"]:
+            return None
+        expires_at = datetime.fromisoformat(str(row["expires_at"]))
+        if expires_at < datetime.now(UTC):
+            return None
+        await conn.execute(
+            "UPDATE email_tokens SET used_at = ? WHERE id = ?",
+            (datetime.now(UTC).isoformat(), int(row["id"])),
+        )
+        await conn.commit()
+        return int(row["user_id"])
+    finally:
+        await conn.close()
+
+
+async def _send_verification_email(user_id: int, email: str) -> None:
+    _require_mailer_config()
+    allowed = await _email_send_allowed(user_id, "verify_email")
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Verification email was sent recently")
+    token = await _issue_email_token(
+        user_id,
+        "verify_email",
+        datetime.now(UTC) + timedelta(hours=VERIFY_EMAIL_TOKEN_TTL_HOURS),
+    )
+    verify_url = f"{settings.site_url.rstrip('/')}/auth/verify-email?token={token}"
+    html = render_template(
+        "email_verify.html",
+        {"verify_url": verify_url, "expires_hours": VERIFY_EMAIL_TOKEN_TTL_HOURS},
+    )
+    text = (
+        f"请验证您的盯盘侠邮箱：{verify_url}\n"
+        f"该链接 {VERIFY_EMAIL_TOKEN_TTL_HOURS} 小时内有效。"
+    )
+    try:
+        await run_in_threadpool(
+            send_resend_email,
+            api_key=settings.resend_api_key,
+            from_email=settings.mail_from_auth,
+            to_email=email,
+            subject="验证您的盯盘侠邮箱",
+            html=html,
+            text=text,
+        )
+    except MailerError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+
+async def _send_password_reset_email(user_id: int, email: str) -> None:
+    _require_mailer_config()
+    allowed = await _email_send_allowed(user_id, "reset_password")
+    if not allowed:
+        return
+    token = await _issue_email_token(
+        user_id,
+        "reset_password",
+        datetime.now(UTC) + timedelta(minutes=RESET_PASSWORD_TOKEN_TTL_MINUTES),
+    )
+    reset_url = f"{settings.site_url.rstrip('/')}/reset-password?token={token}"
+    html = render_template(
+        "email_reset_password.html",
+        {"reset_url": reset_url, "expires_minutes": RESET_PASSWORD_TOKEN_TTL_MINUTES},
+    )
+    text = (
+        f"请通过以下链接重置您的盯盘侠密码：{reset_url}\n"
+        f"该链接 {RESET_PASSWORD_TOKEN_TTL_MINUTES} 分钟内有效。"
+    )
+    try:
+        await run_in_threadpool(
+            send_resend_email,
+            api_key=settings.resend_api_key,
+            from_email=settings.mail_from_auth,
+            to_email=email,
+            subject="重置您的盯盘侠密码",
+            html=html,
+            text=text,
+        )
+    except MailerError:
+        return
 
 
 @app.on_event("startup")
@@ -171,10 +362,7 @@ async def home(request: Request, user=Depends(optional_user)):
     return templates.TemplateResponse(
         request,
         "index.html",
-        {
-            "title": "盯盘侠",
-            "user": None,
-        },
+        _template_context(request, title="盯盘侠", user=None),
     )
 
 
@@ -182,14 +370,51 @@ async def home(request: Request, user=Depends(optional_user)):
 async def login_page(request: Request, user=Depends(optional_user)):
     if user is not None:
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-    return templates.TemplateResponse(request, "login.html", {"title": "登录", "user": None})
+    return templates.TemplateResponse(request, "login.html", _template_context(request, title="登录", user=None))
 
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request, user=Depends(optional_user)):
     if user is not None:
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-    return templates.TemplateResponse(request, "register.html", {"title": "注册", "user": None})
+    return templates.TemplateResponse(request, "register.html", _template_context(request, title="注册", user=None))
+
+
+@app.get("/forgot-password", response_class=HTMLResponse)
+async def forgot_password_page(request: Request, user=Depends(optional_user)):
+    if user is not None:
+        return RedirectResponse(url="/settings", status_code=status.HTTP_302_FOUND)
+    return templates.TemplateResponse(request, "forgot_password.html", _template_context(request, title="忘记密码", user=None))
+
+
+@app.get("/reset-password", response_class=HTMLResponse)
+async def reset_password_page(request: Request, token: str = "", user=Depends(optional_user)):
+    if user is not None:
+        return RedirectResponse(url="/settings", status_code=status.HTTP_302_FOUND)
+    return templates.TemplateResponse(
+        request,
+        "reset_password.html",
+        _template_context(request, title="重置密码", user=None, token=token),
+    )
+
+
+@app.get("/auth/verify-email", response_class=HTMLResponse)
+async def verify_email_page(request: Request, token: str = ""):
+    success = False
+    if token:
+        user_id = await _consume_email_token(token, "verify_email")
+        if user_id is not None:
+            await execute(
+                settings.db_path,
+                "UPDATE users SET email_verified_at = ? WHERE id = ? AND email_verified_at = ''",
+                (datetime.now(UTC).isoformat(), user_id),
+            )
+            success = True
+    return templates.TemplateResponse(
+        request,
+        "auth_verify_result.html",
+        _template_context(request, title="邮箱验证", user=None, success=success),
+    )
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -262,16 +487,17 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
     return templates.TemplateResponse(
         request,
         "dashboard.html",
-        {
-            "title": "Dashboard",
-            "user": user,
-            "subscriptions": subscriptions,
-            "models": models,
-            "push_enabled": push_enabled,
-            "push_configured": bool(settings.vapid_public_key and settings.vapid_private_key and settings.vapid_claims_email),
-            "daily_push_time": user.daily_push_time,
-            "push_timezone": user.push_timezone,
-        },
+        _template_context(
+            request,
+            title="Dashboard",
+            user=user,
+            subscriptions=subscriptions,
+            models=models,
+            push_enabled=push_enabled,
+            push_configured=bool(settings.vapid_public_key and settings.vapid_private_key and settings.vapid_claims_email),
+            daily_push_time=user.daily_push_time,
+            push_timezone=user.push_timezone,
+        ),
     )
 
 
@@ -279,6 +505,8 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
 async def report_latest_page(request: Request, stock_code: str, user=Depends(page_user_or_redirect)):
     if user is None:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    if not user.email_verified_at:
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     subscription = await fetch_one(
         settings.db_path,
         """
@@ -320,6 +548,8 @@ async def report_latest_page(request: Request, stock_code: str, user=Depends(pag
 async def report_page(request: Request, stock_code: str, trade_date: str, user=Depends(page_user_or_redirect)):
     if user is None:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    if not user.email_verified_at:
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     subscription = await fetch_one(
         settings.db_path,
         """
@@ -385,11 +615,7 @@ async def report_page(request: Request, stock_code: str, trade_date: str, user=D
     return templates.TemplateResponse(
         request,
         "report.html",
-        {
-            "title": "报告页",
-            "user": user,
-            **context,
-        },
+        _template_context(request, title="报告页", user=user, **context),
     )
 
 
@@ -408,42 +634,44 @@ async def settings_page(request: Request, user=Depends(page_user_or_redirect)):
     return templates.TemplateResponse(
         request,
         "settings_placeholder.html",
-        {
-            "title": "设置",
-            "user": user,
-            "models": models,
-        },
+        _template_context(request, title="设置", user=user, models=models),
     )
 
 
 @app.post("/api/auth/register")
-async def register(payload: RegisterPayload):
+async def register(request: Request, payload: RegisterPayload):
+    _require_mailer_config()
+    _check_rate_limit("register-ip", _client_host(request), max_attempts=5, window_seconds=60 * 10)
     existing = await fetch_one(
         settings.db_path,
-        "SELECT id FROM users WHERE email = ?",
+        "SELECT id, email_verified_at FROM users WHERE email = ?",
         (payload.email.lower(),),
     )
-    if existing is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
-    user_id = await execute(
-        settings.db_path,
-        """
-        INSERT INTO users (email, password_hash, preferred_model, points_balance)
-        VALUES (?, ?, 'gemini', 0)
-        """,
-        (payload.email.lower(), hash_password(payload.password)),
-    )
-    response = JSONResponse({"ok": True, "user_id": user_id})
-    _set_session_cookie(response, user_id)
-    return response
+    if existing is None:
+        user_id = await execute(
+            settings.db_path,
+            """
+            INSERT INTO users (email, password_hash, preferred_model, points_balance)
+            VALUES (?, ?, 'gemini', 0)
+            """,
+            (payload.email.lower(), hash_password(payload.password)),
+        )
+        await _send_verification_email(user_id, payload.email.lower())
+    elif not str(existing["email_verified_at"]):
+        await _send_verification_email(int(existing["id"]), payload.email.lower())
+    return {
+        "ok": True,
+        "message": "如果该邮箱可注册，验证邮件已经发送。请先验证邮箱后再登录。",
+    }
 
 
 @app.post("/api/auth/login")
-async def login(payload: LoginPayload):
+async def login(request: Request, payload: LoginPayload):
+    _check_rate_limit("login-ip", _client_host(request), max_attempts=10, window_seconds=60 * 10)
     row = await fetch_one(
         settings.db_path,
         """
-        SELECT id, password_hash
+        SELECT id, password_hash, email_verified_at
         FROM users
         WHERE email = ? AND is_active = 1
         """,
@@ -451,7 +679,7 @@ async def login(payload: LoginPayload):
     )
     if row is None or not verify_password(payload.password, str(row["password_hash"])):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
-    response = JSONResponse({"ok": True, "user_id": int(row["id"])})
+    response = JSONResponse({"ok": True, "user_id": int(row["id"]), "email_verified": bool(str(row["email_verified_at"]))})
     _set_session_cookie(response, int(row["id"]))
     return response
 
@@ -470,14 +698,67 @@ async def auth_me(user=Depends(current_user)):
         "email": user.email,
         "preferred_model": user.preferred_model,
         "points_balance": user.points_balance,
+        "email_verified": bool(user.email_verified_at),
+        "email_verified_at": user.email_verified_at,
         "daily_push_time": user.daily_push_time,
         "push_timezone": user.push_timezone,
         "last_daily_push_trade_date": user.last_daily_push_trade_date,
     }
 
 
+@app.post("/api/auth/resend-verification")
+async def resend_verification(user=Depends(current_user)):
+    if user.email_verified_at:
+        return {"ok": True, "message": "邮箱已验证。"}
+    await _send_verification_email(user.id, user.email)
+    return {"ok": True, "message": "验证邮件已重新发送。"}
+
+
+@app.post("/api/auth/forgot-password")
+async def forgot_password(request: Request, payload: ForgotPasswordPayload):
+    _check_rate_limit("forgot-ip", _client_host(request), max_attempts=5, window_seconds=60 * 10)
+    row = await fetch_one(
+        settings.db_path,
+        "SELECT id, email FROM users WHERE email = ? AND is_active = 1",
+        (payload.email.lower(),),
+    )
+    if row is not None:
+        await _send_password_reset_email(int(row["id"]), str(row["email"]))
+    return {"ok": True, "message": "如果该邮箱已注册，您将收到重置密码邮件。"}
+
+
+@app.post("/api/auth/reset-password")
+async def reset_password(payload: ResetPasswordPayload):
+    user_id = await _consume_email_token(payload.token, "reset_password")
+    if user_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reset link is invalid or expired")
+    await execute(
+        settings.db_path,
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (hash_password(payload.password), user_id),
+    )
+    return {"ok": True, "message": "密码已更新，请使用新密码登录。"}
+
+
+@app.post("/api/auth/change-password")
+async def change_password(payload: ChangePasswordPayload, user=Depends(current_user)):
+    row = await fetch_one(
+        settings.db_path,
+        "SELECT password_hash FROM users WHERE id = ? AND is_active = 1",
+        (user.id,),
+    )
+    if row is None or not verify_password(payload.current_password, str(row["password_hash"])):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
+    await execute(
+        settings.db_path,
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (hash_password(payload.new_password), user.id),
+    )
+    return {"ok": True, "message": "密码已更新。"}
+
+
 @app.get("/api/subscriptions")
-async def list_subscriptions(user=Depends(current_user)):
+async def list_subscriptions(user=Depends(verified_user)):
     rows = await fetch_all(
         settings.db_path,
         """
@@ -492,7 +773,7 @@ async def list_subscriptions(user=Depends(current_user)):
 
 
 @app.post("/api/subscriptions")
-async def create_subscription(payload: SubscriptionCreatePayload, user=Depends(current_user)):
+async def create_subscription(payload: SubscriptionCreatePayload, user=Depends(verified_user)):
     stock_code = _normalize_stock_code(payload.stock_code)
     stock_name = payload.stock_name.strip() or stock_code
     try:
@@ -510,7 +791,7 @@ async def create_subscription(payload: SubscriptionCreatePayload, user=Depends(c
 
 
 @app.put("/api/subscriptions/{subscription_id}")
-async def update_subscription(subscription_id: int, payload: SubscriptionUpdatePayload, user=Depends(current_user)):
+async def update_subscription(subscription_id: int, payload: SubscriptionUpdatePayload, user=Depends(verified_user)):
     row = await fetch_one(
         settings.db_path,
         "SELECT id, cost_price, model_id, sort_order, is_active FROM subscriptions WHERE id = ? AND user_id = ?",
@@ -535,7 +816,7 @@ async def update_subscription(subscription_id: int, payload: SubscriptionUpdateP
 
 
 @app.delete("/api/subscriptions/{subscription_id}")
-async def delete_subscription(subscription_id: int, user=Depends(current_user)):
+async def delete_subscription(subscription_id: int, user=Depends(verified_user)):
     row = await fetch_one(
         settings.db_path,
         "SELECT id FROM subscriptions WHERE id = ? AND user_id = ?",
@@ -552,14 +833,14 @@ async def delete_subscription(subscription_id: int, user=Depends(current_user)):
 
 
 @app.get("/api/push/vapid-key")
-async def get_vapid_key(user=Depends(current_user)):
+async def get_vapid_key(user=Depends(verified_user)):
     if not settings.vapid_public_key:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Web Push is not configured")
     return {"public_key": settings.vapid_public_key}
 
 
 @app.get("/api/push/status")
-async def push_status(user=Depends(current_user)):
+async def push_status(user=Depends(verified_user)):
     return {
         "configured": bool(settings.vapid_public_key and settings.vapid_private_key and settings.vapid_claims_email),
         "enabled": await has_user_push_subscription(settings.db_path, user_id=user.id),
@@ -568,7 +849,7 @@ async def push_status(user=Depends(current_user)):
 
 
 @app.post("/api/push/subscribe")
-async def subscribe_push(request: Request, payload: PushSubscribePayload, user=Depends(current_user)):
+async def subscribe_push(request: Request, payload: PushSubscribePayload, user=Depends(verified_user)):
     if not (settings.vapid_public_key and settings.vapid_private_key and settings.vapid_claims_email):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Web Push is not configured")
     p256dh = payload.keys.get("p256dh", "").strip()
@@ -588,7 +869,7 @@ async def subscribe_push(request: Request, payload: PushSubscribePayload, user=D
 
 
 @app.post("/api/push/unsubscribe")
-async def unsubscribe_push(payload: dict[str, str], user=Depends(current_user)):
+async def unsubscribe_push(payload: dict[str, str], user=Depends(verified_user)):
     endpoint = payload.get("endpoint", "").strip()
     if not endpoint:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="endpoint is required")
@@ -597,7 +878,7 @@ async def unsubscribe_push(payload: dict[str, str], user=Depends(current_user)):
 
 
 @app.post("/api/push/preferences")
-async def update_push_preferences(payload: PushPreferencesPayload, user=Depends(current_user)):
+async def update_push_preferences(payload: PushPreferencesPayload, user=Depends(verified_user)):
     hour_text, minute_text = payload.daily_push_time.split(":")
     hour = int(hour_text)
     minute = int(minute_text)
@@ -616,7 +897,7 @@ async def update_push_preferences(payload: PushPreferencesPayload, user=Depends(
 
 
 @app.post("/api/push/test")
-async def send_test_push(user=Depends(current_user)):
+async def send_test_push(user=Depends(verified_user)):
     try:
         delivered = await send_push_to_user(
             settings.db_path,

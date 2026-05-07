@@ -3,7 +3,7 @@
 {% block content %}
 <section class="card" style="max-width:520px;margin:0 auto;">
   <h1 style="margin:0 0 10px;">登录</h1>
-  <p class="muted" style="margin:0 0 20px;">当前页面会写入 `httpOnly` 会话 Cookie，登录后跳转到 dashboard。</p>
+  <p class="muted" style="margin:0 0 20px;">使用邮箱和密码登录。未验证邮箱的账户登录后仍可进入面板，但关键功能会被限制。</p>
   <form class="stack" id="login-form">
     <div class="field">
       <label for="email">邮箱</label>
@@ -15,6 +15,10 @@
     </div>
     <div class="message" id="login-message"></div>
     <button type="submit">登录</button>
+    <div class="row" style="justify-content:space-between;">
+      <a class="muted" href="/forgot-password">忘记密码？</a>
+      <a class="muted" href="/register">还没有账户，去注册</a>
+    </div>
   </form>
 </section>
 <script>
@@ -36,6 +40,9 @@
     if (!response.ok) {
       message.textContent = data.detail || "登录失败";
       return;
+    }
+    if (!data.email_verified) {
+      message.textContent = "登录成功，但邮箱尚未验证，正在跳转到 dashboard。";
     }
     window.location.href = "/dashboard";
   });

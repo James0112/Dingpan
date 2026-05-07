@@ -130,11 +130,23 @@ SCHEMA_STATEMENTS = (
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS email_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL,
+        token_type TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
     "CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id, is_active, sort_order)",
     "CREATE INDEX IF NOT EXISTS idx_subscriptions_stock ON subscriptions(stock_code, model_id, is_active)",
     "CREATE INDEX IF NOT EXISTS idx_analysis_cache_lookup ON analysis_cache(stock_code, trade_date, model_id)",
     "CREATE INDEX IF NOT EXISTS idx_user_context_lookup ON user_context(user_id, stock_code, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_email_tokens_hash ON email_tokens(token_hash)",
 )
 
 
@@ -163,6 +175,8 @@ async def _ensure_schema_migrations(conn: aiosqlite.Connection) -> None:
         await conn.execute("ALTER TABLE users ADD COLUMN last_daily_push_trade_date TEXT NOT NULL DEFAULT ''")
     if not await _column_exists(conn, "users", "last_daily_push_sent_at"):
         await conn.execute("ALTER TABLE users ADD COLUMN last_daily_push_sent_at TEXT NOT NULL DEFAULT ''")
+    if not await _column_exists(conn, "users", "email_verified_at"):
+        await conn.execute("ALTER TABLE users ADD COLUMN email_verified_at TEXT NOT NULL DEFAULT ''")
 
 
 async def init_db(db_path: str) -> None:

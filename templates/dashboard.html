@@ -1,6 +1,19 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% set is_verified = user.email_verified_at %}
+{% if not is_verified %}
+<section class="card" style="margin-bottom:16px;border-color:#ffa502;">
+  <div class="row" style="justify-content:space-between;align-items:center;">
+    <div>
+      <p class="section-title" style="margin-bottom:6px;">邮箱尚未验证</p>
+      <p class="muted" style="margin:0;line-height:1.8;">请先完成邮箱验证。验证前您仍可登录，但无法添加订阅、查看报告或开启推送。</p>
+    </div>
+    <button type="button" class="secondary" id="resend-verification-button">重新发送验证邮件</button>
+  </div>
+  <div class="message" id="verification-message" style="margin-top:12px;"></div>
+</section>
+{% endif %}
 <div class="grid two">
   <section class="card">
     <p class="section-title">账户概览</p>
@@ -37,7 +50,7 @@
             id="push-toggle"
             class="secondary"
             onclick="window.handlePushToggle && window.handlePushToggle()"
-            {% if not push_configured %}disabled title="需要先在 .env 中配置 VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_CLAIMS_EMAIL"{% endif %}
+            {% if (not push_configured) or (not is_verified) %}disabled title="请先验证邮箱，并确认环境已配置 VAPID"{% endif %}
           >
             {% if push_enabled %}关闭推送{% else %}开启推送{% endif %}
           </button>
@@ -61,13 +74,13 @@
             </div>
           </div>
           <div class="row">
-            <button type="submit" class="secondary">保存推送时间</button>
+            <button type="submit" class="secondary" {% if not is_verified %}disabled{% endif %}>保存推送时间</button>
             <button
               type="button"
               id="push-test"
               class="secondary"
               onclick="window.handlePushTest && window.handlePushTest()"
-              {% if not push_configured %}disabled title="需要先完成 VAPID 配置并开启推送"{% endif %}
+              {% if (not push_configured) or (not is_verified) %}disabled title="请先验证邮箱、完成 VAPID 配置并开启推送"{% endif %}
             >
               发送测试推送
             </button>
@@ -82,26 +95,26 @@
     <form class="stack" id="subscription-form">
       <div class="field">
         <label for="stock_code">股票代码</label>
-        <input id="stock_code" name="stock_code" placeholder="例如 603212" required>
+        <input id="stock_code" name="stock_code" placeholder="例如 603212" required {% if not is_verified %}disabled{% endif %}>
       </div>
       <div class="field">
         <label for="stock_name">股票名称</label>
-        <input id="stock_name" name="stock_name" placeholder="暂时可留空，后续会自动解析">
+        <input id="stock_name" name="stock_name" placeholder="暂时可留空，后续会自动解析" {% if not is_verified %}disabled{% endif %}>
       </div>
       <div class="field">
         <label for="cost_price">持仓成本</label>
-        <input id="cost_price" name="cost_price" type="number" step="0.01" min="0" value="0">
+        <input id="cost_price" name="cost_price" type="number" step="0.01" min="0" value="0" {% if not is_verified %}disabled{% endif %}>
       </div>
       <div class="field">
         <label for="model_id">分析模型</label>
-        <select id="model_id" name="model_id">
+        <select id="model_id" name="model_id" {% if not is_verified %}disabled{% endif %}>
           {% for model in models %}
           <option value="{{ model.model_id }}">{{ model.display_name }} · {{ model.points_per_call }}点/次</option>
           {% endfor %}
         </select>
       </div>
       <div class="message" id="subscription-message"></div>
-      <button type="submit">添加订阅</button>
+      <button type="submit" {% if not is_verified %}disabled{% endif %}>添加订阅</button>
     </form>
   </section>
 </div>
@@ -120,7 +133,7 @@
             <div style="font-size:18px;font-weight:800;">{{ item.stock_name or item.stock_code }}</div>
             <div class="muted" style="margin-top:4px;">{{ item.stock_code }} · {{ item.model_id }}</div>
           </div>
-          <button class="secondary delete-button" data-id="{{ item.id }}" type="button">删除</button>
+          <button class="secondary delete-button" data-id="{{ item.id }}" type="button" {% if not is_verified %}disabled{% endif %}>删除</button>
         </div>
         {% if item.latest_close_price is not none %}
         <div class="row" style="margin-top:14px;">
@@ -139,7 +152,11 @@
         {% endif %}
         <div class="row" style="margin-top:14px;">
           <span class="pill">成本 ¥{{ '%.2f'|format(item.cost_price) }}</span>
+          {% if is_verified %}
           <a class="button secondary" href="/report/{{ item.stock_code }}/latest">查看报告</a>
+          {% else %}
+          <span class="button secondary disabled">验证后查看报告</span>
+          {% endif %}
         </div>
       </article>
       {% endfor %}
@@ -160,9 +177,11 @@
   const pushPreferencesForm = document.getElementById("push-preferences-form");
   const pushTestButton = document.getElementById("push-test");
   const pushStatusLabel = pushToggle ? pushToggle.parentElement.querySelector("div div:last-child") : null;
+  const resendVerificationButton = document.getElementById("resend-verification-button");
+  const verificationMessage = document.getElementById("verification-message");
 
   async function refreshPushState() {
-    if (!pushToggle) {
+    if (!pushToggle || pushToggle.disabled) {
       return;
     }
     try {
@@ -207,6 +226,20 @@
     }
     window.location.reload();
   });
+
+  if (resendVerificationButton) {
+    resendVerificationButton.addEventListener("click", async () => {
+      resendVerificationButton.disabled = true;
+      verificationMessage.textContent = "正在发送验证邮件...";
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      const data = await response.json().catch(() => ({}));
+      verificationMessage.textContent = data.message || data.detail || "操作完成";
+      resendVerificationButton.disabled = false;
+    });
+  }
 
   document.querySelectorAll(".delete-button").forEach((button) => {
     button.addEventListener("click", async () => {

@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero" style="max-width:640px;margin:0 auto;">
+  <div class="pill">{% if success %}验证成功{% else %}验证失败{% endif %}</div>
+  <h1 style="margin:18px 0 10px;">{% if success %}邮箱已验证{% else %}验证链接无效或已过期{% endif %}</h1>
+  <p class="muted" style="line-height:1.8;max-width:560px;">
+    {% if success %}
+    您的盯盘侠账户已经验证完成。现在可以登录并使用订阅、报告与推送功能。
+    {% else %}
+    请返回登录或 Dashboard 后重新发送验证邮件，再使用新链接完成验证。
+    {% endif %}
+  </p>
+  <div class="row" style="margin-top:18px;">
+    <a class="button" href="/login">去登录</a>
+    <a class="button secondary" href="/register">返回注册</a>
+  </div>
+</section>
+{% endblock %}

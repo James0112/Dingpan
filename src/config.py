@@ -39,6 +39,9 @@ class Settings:
     qq_email: str | None = None
     qq_email_auth_code: str | None = None
     receiver_emails: tuple[str, ...] = ()
+    resend_api_key: str | None = None
+    mail_from_auth: str | None = None
+    mail_from_reports: str | None = None
 
 
 def _parse_bool(value: str | None, default: bool = False) -> bool:
@@ -107,4 +110,7 @@ def load_settings() -> Settings:
         qq_email=os.getenv("QQ_EMAIL"),
         qq_email_auth_code=os.getenv("QQ_EMAIL_AUTH_CODE"),
         receiver_emails=_parse_csv(os.getenv("RECEIVER_EMAIL")),
+        resend_api_key=os.getenv("RESEND_API_KEY"),
+        mail_from_auth=os.getenv("MAIL_FROM_AUTH"),
+        mail_from_reports=os.getenv("MAIL_FROM_REPORTS"),
     )

@@ -2,14 +2,47 @@
 
 {% block content %}
 <section class="card">
-  <p class="section-title">设置页占位</p>
+  <p class="section-title">账户与安全</p>
   <div class="stack">
     <div>
       <div class="muted">当前账户</div>
       <div style="font-size:20px;font-weight:800;">{{ user.email }}</div>
+      <div class="muted" style="margin-top:8px;">
+        邮箱状态：
+        {% if user.email_verified_at %}
+        已验证
+        {% else %}
+        未验证
+        {% endif %}
+      </div>
+      {% if not user.email_verified_at %}
+      <div class="row" style="margin-top:12px;">
+        <button class="secondary" type="button" id="resend-verification-button">重新发送验证邮件</button>
+      </div>
+      <div class="message" id="verification-message"></div>
+      {% endif %}
+    </div>
+    <div class="card">
+      <p class="section-title">修改密码</p>
+      <form class="stack" id="change-password-form">
+        <div class="field">
+          <label for="current_password">当前密码</label>
+          <input id="current_password" name="current_password" type="password" autocomplete="current-password" minlength="8" required>
+        </div>
+        <div class="field">
+          <label for="new_password">新密码</label>
+          <input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="8" required>
+        </div>
+        <div class="field">
+          <label for="new_password_confirm">确认新密码</label>
+          <input id="new_password_confirm" name="new_password_confirm" type="password" autocomplete="new-password" minlength="8" required>
+        </div>
+        <div class="message" id="password-message"></div>
+        <button type="submit">更新密码</button>
+      </form>
     </div>
     <div>
-      <div class="muted">后续会接入的模型配置</div>
+      <div class="muted">模型配置</div>
       <div class="list" style="margin-top:12px;">
         {% for model in models %}
         <div class="stock-card">
@@ -21,4 +54,48 @@
     </div>
   </div>
 </section>
+<script>
+  const resendVerificationButton = document.getElementById("resend-verification-button");
+  const verificationMessage = document.getElementById("verification-message");
+  const changePasswordForm = document.getElementById("change-password-form");
+  const passwordMessage = document.getElementById("password-message");
+
+  if (resendVerificationButton) {
+    resendVerificationButton.addEventListener("click", async () => {
+      resendVerificationButton.disabled = true;
+      verificationMessage.textContent = "正在发送验证邮件...";
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      const data = await response.json().catch(() => ({}));
+      verificationMessage.textContent = data.message || data.detail || "操作完成";
+      resendVerificationButton.disabled = false;
+    });
+  }
+
+  changePasswordForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (changePasswordForm.new_password.value !== changePasswordForm.new_password_confirm.value) {
+      passwordMessage.textContent = "两次输入的新密码不一致";
+      return;
+    }
+    passwordMessage.textContent = "正在更新密码...";
+    const response = await fetch("/api/auth/change-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        current_password: changePasswordForm.current_password.value,
+        new_password: changePasswordForm.new_password.value
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      passwordMessage.textContent = data.detail || "更新失败";
+      return;
+    }
+    passwordMessage.textContent = data.message || "密码已更新";
+    changePasswordForm.reset();
+  });
+</script>
 {% endblock %}
