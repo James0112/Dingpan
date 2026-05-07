@@ -10,5 +10,6 @@ __pycache__/
 .mypy_cache/
 
 output/
+data/
 
 .DS_Store

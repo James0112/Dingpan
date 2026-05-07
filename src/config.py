@@ -13,9 +13,16 @@ ENV_FILE = BASE_DIR / ".env"
 
 @dataclass(frozen=True)
 class Settings:
+    model_id: str = "gemini"
     stock_code: str = "603212"
     stock_name: str = ""
     cost_price: float = 0.0
+    jwt_secret: str = "change-me"
+    site_url: str = "http://127.0.0.1:8000"
+    db_path: str = str(BASE_DIR / "data" / "dingpan.db")
+    vapid_public_key: str | None = None
+    vapid_private_key: str | None = None
+    vapid_claims_email: str | None = None
     model_name: str = "gemini-3-flash-preview"
     fallback_model_name: str = "gemini-2.5-flash-lite"
     timezone_name: str = "Asia/Shanghai"
@@ -74,9 +81,16 @@ def load_dotenv_file() -> None:
 def load_settings() -> Settings:
     load_dotenv_file()
     return Settings(
+        model_id=_env_or_default("MODEL_ID", "gemini"),
         stock_code=_env_or_default("STOCK_CODE", "603212"),
         stock_name=os.getenv("STOCK_NAME", ""),
         cost_price=float(_env_or_default("COST_PRICE", "0")),
+        jwt_secret=_env_or_default("JWT_SECRET", "change-me"),
+        site_url=_env_or_default("SITE_URL", "http://127.0.0.1:8000"),
+        db_path=_env_or_default("DB_PATH", str(BASE_DIR / "data" / "dingpan.db")),
+        vapid_public_key=os.getenv("VAPID_PUBLIC_KEY"),
+        vapid_private_key=os.getenv("VAPID_PRIVATE_KEY"),
+        vapid_claims_email=os.getenv("VAPID_CLAIMS_EMAIL"),
         model_name=_env_or_default("GEMINI_MODEL", "gemini-3-flash-preview"),
         fallback_model_name=_env_or_default("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash-lite"),
         timezone_name=_env_or_default("TZ_NAME", "Asia/Shanghai"),

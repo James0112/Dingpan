@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="grid two">
+  <section class="card">
+    <p class="section-title">账户概览</p>
+    <div class="stack">
+      <div>
+        <div class="muted">登录邮箱</div>
+        <div style="font-size:18px;font-weight:700;">{{ user.email }}</div>
+      </div>
+      <div class="row">
+        <div class="card" style="padding:14px;flex:1;">
+          <div class="muted">默认模型</div>
+          <div style="font-weight:700;">{{ user.preferred_model }}</div>
+        </div>
+        <div class="card" style="padding:14px;flex:1;">
+          <div class="muted">点数余额</div>
+          <div style="font-weight:700;">{{ user.points_balance }}</div>
+        </div>
+      </div>
+      <div class="card" style="padding:14px;">
+        <div class="row" style="justify-content:space-between;align-items:center;">
+          <div>
+            <div class="muted">日报推送</div>
+            <div style="font-weight:700;">{% if push_enabled %}已开启{% else %}未开启{% endif %}</div>
+            <div class="muted" style="margin-top:6px;">
+              {% if push_configured %}
+              当前环境已配置 VAPID，可进行浏览器推送订阅。
+              {% else %}
+              当前环境未配置 VAPID，开启推送按钮会被禁用。
+              {% endif %}
+            </div>
+          </div>
+          <button
+            type="button"
+            id="push-toggle"
+            class="secondary"
+            onclick="window.handlePushToggle && window.handlePushToggle()"
+            {% if not push_configured %}disabled title="需要先在 .env 中配置 VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / VAPID_CLAIMS_EMAIL"{% endif %}
+          >
+            {% if push_enabled %}关闭推送{% else %}开启推送{% endif %}
+          </button>
+        </div>
+        <p class="muted" id="push-message" style="margin:12px 0 0;">
+          {% if push_configured %}
+          Web Push 已接入。浏览器会请求通知权限，并把当前设备写入您的订阅列表。
+          {% else %}
+          当前环境未配置 VAPID 公私钥，推送功能暂不可用。
+          {% endif %}
+        </p>
+        <form class="stack" id="push-preferences-form" style="margin-top:14px;">
+          <div class="row">
+            <div class="field" style="flex:1;min-width:160px;">
+              <label for="daily_push_time">推送时间</label>
+              <input id="daily_push_time" name="daily_push_time" type="time" value="{{ daily_push_time }}">
+            </div>
+            <div class="field" style="flex:1;min-width:220px;">
+              <label for="push_timezone">时区</label>
+              <input id="push_timezone" name="push_timezone" value="{{ push_timezone }}" placeholder="Asia/Shanghai">
+            </div>
+          </div>
+          <div class="row">
+            <button type="submit" class="secondary">保存推送时间</button>
+            <button
+              type="button"
+              id="push-test"
+              class="secondary"
+              onclick="window.handlePushTest && window.handlePushTest()"
+              {% if not push_configured %}disabled title="需要先完成 VAPID 配置并开启推送"{% endif %}
+            >
+              发送测试推送
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <p class="section-title">添加自选股</p>
+    <form class="stack" id="subscription-form">
+      <div class="field">
+        <label for="stock_code">股票代码</label>
+        <input id="stock_code" name="stock_code" placeholder="例如 603212" required>
+      </div>
+      <div class="field">
+        <label for="stock_name">股票名称</label>
+        <input id="stock_name" name="stock_name" placeholder="暂时可留空，后续会自动解析">
+      </div>
+      <div class="field">
+        <label for="cost_price">持仓成本</label>
+        <input id="cost_price" name="cost_price" type="number" step="0.01" min="0" value="0">
+      </div>
+      <div class="field">
+        <label for="model_id">分析模型</label>
+        <select id="model_id" name="model_id">
+          {% for model in models %}
+          <option value="{{ model.model_id }}">{{ model.display_name }} · {{ model.points_per_call }}点/次</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="message" id="subscription-message"></div>
+      <button type="submit">添加订阅</button>
+    </form>
+  </section>
+</div>
+
+<section class="card" style="margin-top:16px;">
+  <div class="row" style="justify-content:space-between;align-items:center;">
+    <p class="section-title" style="margin:0;">我的自选股</p>
+    <span class="pill">{{ subscriptions|length }} 项</span>
+  </div>
+  <div class="list" id="subscription-list" style="margin-top:14px;">
+    {% if subscriptions %}
+      {% for item in subscriptions %}
+      <article class="stock-card" data-id="{{ item.id }}">
+        <div class="row" style="justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:18px;font-weight:800;">{{ item.stock_name or item.stock_code }}</div>
+            <div class="muted" style="margin-top:4px;">{{ item.stock_code }} · {{ item.model_id }}</div>
+          </div>
+          <button class="secondary delete-button" data-id="{{ item.id }}" type="button">删除</button>
+        </div>
+        {% if item.latest_close_price is not none %}
+        <div class="row" style="margin-top:14px;">
+          <span class="pill">¥{{ '%.2f'|format(item.latest_close_price) }}</span>
+          <span class="pill" style="color:{% if item.latest_change_pct > 0 %}#ff4757{% elif item.latest_change_pct < 0 %}#2ed573{% else %}#8ea3bf{% endif %};">
+            {{ '%+.2f'|format(item.latest_change_pct) }}%
+          </span>
+          {% if item.latest_pnl_pct is not none %}
+          <span class="pill">浮盈 {{ '%+.2f'|format(item.latest_pnl_pct) }}%</span>
+          {% endif %}
+        </div>
+        <p class="muted" style="margin:12px 0 0;line-height:1.75;">{{ item.latest_summary }}</p>
+        <div class="muted" style="margin-top:8px;">最新报告：{{ item.latest_trade_date }}</div>
+        {% else %}
+        <p class="muted" style="margin:12px 0 0;line-height:1.75;">暂无共享分析缓存，运行批量生成后这里会显示最新摘要。</p>
+        {% endif %}
+        <div class="row" style="margin-top:14px;">
+          <span class="pill">成本 ¥{{ '%.2f'|format(item.cost_price) }}</span>
+          <a class="button secondary" href="/report/{{ item.stock_code }}/latest">查看报告</a>
+        </div>
+      </article>
+      {% endfor %}
+    {% else %}
+      <div class="stock-card">
+        <div style="font-size:18px;font-weight:700;">还没有自选股</div>
+        <p class="muted" style="margin:10px 0 0;">先添加一只股票，下一阶段会把每日共享分析和报告页接进来。</p>
+      </div>
+    {% endif %}
+  </div>
+</section>
+
+<script>
+  const form = document.getElementById("subscription-form");
+  const message = document.getElementById("subscription-message");
+  const pushToggle = document.getElementById("push-toggle");
+  const pushMessage = document.getElementById("push-message");
+  const pushPreferencesForm = document.getElementById("push-preferences-form");
+  const pushTestButton = document.getElementById("push-test");
+  const pushStatusLabel = pushToggle ? pushToggle.parentElement.querySelector("div div:last-child") : null;
+
+  async function refreshPushState() {
+    if (!pushToggle) {
+      return;
+    }
+    try {
+      const status = await window.DingPanPush.fetchPushStatus();
+      if (pushStatusLabel) {
+        pushStatusLabel.textContent = status.enabled ? "已开启" : "未开启";
+      }
+      pushToggle.textContent = status.enabled ? "关闭推送" : "开启推送";
+      if (pushTestButton) {
+        pushTestButton.disabled = !status.configured || !status.enabled;
+        if (pushTestButton.disabled) {
+          pushTestButton.style.opacity = ".45";
+          pushTestButton.style.cursor = "not-allowed";
+        } else {
+          pushTestButton.style.opacity = "";
+          pushTestButton.style.cursor = "";
+        }
+      }
+    } catch (error) {
+      console.error("Failed to refresh push state:", error);
+    }
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    message.textContent = "正在添加...";
+    const payload = {
+      stock_code: form.stock_code.value.trim(),
+      stock_name: form.stock_name.value.trim(),
+      cost_price: Number(form.cost_price.value || 0),
+      model_id: form.model_id.value
+    };
+    const response = await fetch("/api/subscriptions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      message.textContent = data.detail || "添加失败";
+      return;
+    }
+    window.location.reload();
+  });
+
+  document.querySelectorAll(".delete-button").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const response = await fetch(`/api/subscriptions/${button.dataset.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (response.ok) {
+        window.location.reload();
+      }
+    });
+  });
+
+  window.handlePushToggle = async function handlePushToggle() {
+    if (!pushToggle || pushToggle.disabled) {
+      return;
+    }
+      pushToggle.disabled = true;
+      try {
+        const existing = await window.DingPanPush.getExistingSubscription();
+        if (existing) {
+          pushMessage.textContent = "正在关闭推送...";
+          await window.DingPanPush.unsubscribePush();
+          pushMessage.textContent = "当前设备的推送已关闭。";
+          pushToggle.textContent = "开启推送";
+        } else {
+          pushMessage.textContent = "正在申请通知权限并注册推送...";
+          await window.DingPanPush.subscribePush();
+          pushMessage.textContent = "当前设备的推送已开启。";
+        }
+      } catch (error) {
+        console.error("Push toggle failed:", error);
+        pushMessage.textContent = error.message || "推送操作失败";
+      } finally {
+        pushToggle.disabled = false;
+        await refreshPushState();
+      }
+  };
+
+  if (pushPreferencesForm) {
+    pushPreferencesForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      pushMessage.textContent = "正在保存推送设置...";
+      const payload = {
+        daily_push_time: pushPreferencesForm.daily_push_time.value,
+        push_timezone: pushPreferencesForm.push_timezone.value.trim()
+      };
+      const response = await fetch("/api/push/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        pushMessage.textContent = data.detail || "保存失败";
+        return;
+      }
+      pushMessage.textContent = "推送时间设置已保存。";
+    });
+  }
+
+  window.handlePushTest = async function handlePushTest() {
+    if (!pushTestButton || pushTestButton.disabled) {
+      return;
+    }
+      pushTestButton.disabled = true;
+      pushMessage.textContent = "正在发送测试推送...";
+      const response = await fetch("/api/push/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        pushMessage.textContent = data.detail || "测试推送失败";
+        await refreshPushState();
+        return;
+      }
+      pushMessage.textContent = `测试推送已发送，送达设备数：${data.delivered}`;
+      await refreshPushState();
+  };
+
+  refreshPushState();
+</script>
+{% endblock %}

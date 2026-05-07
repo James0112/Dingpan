@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="stack">
+  <section class="hero">
+    <div class="pill">多用户 PWA 骨架已启动</div>
+    <h1 style="font-size:38px;line-height:1.08;margin:18px 0 12px;">你的 AI 持仓分析助手，开始从邮件走向网页。</h1>
+    <p class="muted" style="font-size:16px;line-height:1.8;max-width:680px;">
+      当前阶段先打通注册、登录、自选股管理和后续报告页入口。共享分析缓存、报告渲染、Push 与个性化分析会在后续阶段继续接入。
+    </p>
+    <div class="row" style="margin-top:18px;">
+      <a class="button" href="/register">立即注册</a>
+      <a class="button secondary" href="/login">已有账号，去登录</a>
+    </div>
+  </section>
+
+  <section class="grid two">
+    <div class="card">
+      <p class="section-title">当前可验证</p>
+      <div class="stack muted">
+        <span>注册 / 登录 / 退出</span>
+        <span>SQLite 用户与订阅持久化</span>
+        <span>Dashboard SSR 页面与空态</span>
+      </div>
+    </div>
+    <div class="card">
+      <p class="section-title">下一步接入</p>
+      <div class="stack muted">
+        <span>analysis_cache 批量生成</span>
+        <span>报告页共享分析展示</span>
+        <span>Web Push 与个性化分析</span>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

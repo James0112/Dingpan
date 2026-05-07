@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card" style="max-width:520px;margin:0 auto;">
+  <h1 style="margin:0 0 10px;">注册</h1>
+  <p class="muted" style="margin:0 0 20px;">Phase 1B 先开放基础账号系统，默认模型为 Gemini。</p>
+  <form class="stack" id="register-form">
+    <div class="field">
+      <label for="email">邮箱</label>
+      <input id="email" name="email" type="email" autocomplete="email" required>
+    </div>
+    <div class="field">
+      <label for="password">密码</label>
+      <input id="password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+    </div>
+    <div class="message" id="register-message"></div>
+    <button type="submit">创建账户</button>
+  </form>
+</section>
+<script>
+  const form = document.getElementById("register-form");
+  const message = document.getElementById("register-message");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    message.textContent = "正在创建账户...";
+    const payload = {
+      email: form.email.value.trim(),
+      password: form.password.value
+    };
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      message.textContent = data.detail || "注册失败";
+      return;
+    }
+    window.location.href = "/dashboard";
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card" style="max-width:520px;margin:0 auto;">
+  <h1 style="margin:0 0 10px;">登录</h1>
+  <p class="muted" style="margin:0 0 20px;">当前页面会写入 `httpOnly` 会话 Cookie，登录后跳转到 dashboard。</p>
+  <form class="stack" id="login-form">
+    <div class="field">
+      <label for="email">邮箱</label>
+      <input id="email" name="email" type="email" autocomplete="email" required>
+    </div>
+    <div class="field">
+      <label for="password">密码</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" minlength="8" required>
+    </div>
+    <div class="message" id="login-message"></div>
+    <button type="submit">登录</button>
+  </form>
+</section>
+<script>
+  const form = document.getElementById("login-form");
+  const message = document.getElementById("login-message");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    message.textContent = "正在登录...";
+    const payload = {
+      email: form.email.value.trim(),
+      password: form.password.value
+    };
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      message.textContent = data.detail || "登录失败";
+      return;
+    }
+    window.location.href = "/dashboard";
+  });
+</script>
+{% endblock %}

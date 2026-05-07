@@ -1,6 +1,9 @@
 # DingPan
 
-盯盘侠每日盯盘邮件工具。它会在交易日上午生成上一交易日的 A 股分析邮件，并通过 QQ 邮箱 SMTP 推送。
+盯盘侠当前是一个最小 MVP：
+- 保留原有的每日邮件日报
+- 提供多用户 Web 端注册、登录、自选股与报告页
+- 支持 Web Push 订阅与按用户设定时间发送日报通知
 
 ## 功能
 
@@ -9,15 +12,22 @@
 - Gemini 2.5 Flash 输出结构化 JSON 分析
 - Jinja2 渲染深色 HTML 邮件
 - QQ 邮箱 SMTP 发送
-- GitHub Actions 定时执行并保存 HTML artifact
+- SQLite 持久化用户、订阅、共享分析缓存、Push 订阅
+- FastAPI SSR 页面：登录、注册、Dashboard、报告页
+- Web Push 订阅、测试推送、按用户设定时间发送通知
 
 ## 项目结构
 
 ```text
 dingpan/
+├── app.py
+├── generate.py
+├── send_push.py
+├── scripts/generate_vapid_keys.py
 ├── .github/workflows/daily.yml
 ├── src/
-├── templates/email_template.html
+├── templates/
+├── static/
 ├── main.py
 ├── requirements.txt
 └── README.md
@@ -38,6 +48,9 @@ GEMINI_API_KEY=your_gemini_api_key
 QQ_EMAIL=your_sender@qq.com
 QQ_EMAIL_AUTH_CODE=your_qq_smtp_auth_code
 RECEIVER_EMAIL=your_receiver@example.com
+JWT_SECRET=change-this-in-production
+SITE_URL=http://127.0.0.1:8000
+DB_PATH=data/dingpan.db
 ```
 
 程序启动时会自动加载 `.env`，如果系统环境变量和 `.env` 同时存在，优先使用系统环境变量。
@@ -49,6 +62,8 @@ export GEMINI_API_KEY="your_gemini_api_key"
 export QQ_EMAIL="your_sender@qq.com"
 export QQ_EMAIL_AUTH_CODE="your_qq_smtp_auth_code"
 export RECEIVER_EMAIL="first@example.com,second@example.com"
+export JWT_SECRET="change-this-in-production"
+export SITE_URL="http://127.0.0.1:8000"
 ```
 
 可选变量：
@@ -59,11 +74,26 @@ export STOCK_NAME="你的股票名称"
 export COST_PRICE="你的持仓成本"
 export DRY_RUN="true"
 export DISABLE_PROXY="true"
+export MODEL_ID="gemini"
 export GEMINI_MODEL="gemini-3-flash-preview"
 export GEMINI_FALLBACK_MODEL="gemini-2.5-flash-lite"
 ```
 
-3. 本地预览：
+Web Push 变量：
+
+```bash
+export VAPID_PUBLIC_KEY="..."
+export VAPID_PRIVATE_KEY="..."
+export VAPID_CLAIMS_EMAIL="your@email.com"
+```
+
+VAPID 密钥可以本地生成：
+
+```bash
+python scripts/generate_vapid_keys.py
+```
+
+2. 邮件模式本地预览：
 
 ```bash
 python main.py --preview
@@ -78,11 +108,113 @@ python main.py --preview
 DISABLE_PROXY=false python main.py --preview
 ```
 
-4. 本地只跑不发信：
+3. 本地只跑不发信：
 
 ```bash
 DRY_RUN=true python main.py
 ```
+
+4. 启动 Web 端：
+
+```bash
+uvicorn app:app --reload
+```
+
+打开：
+
+- `http://127.0.0.1:8000/`
+- 注册 / 登录
+- Dashboard 添加自选股
+- `generate.py` 生成共享分析
+- Dashboard / Report 查看报告
+
+5. 生成共享分析缓存：
+
+```bash
+python generate.py
+```
+
+常用参数：
+
+```bash
+python generate.py --stock 603212
+python generate.py --date 2026-05-07
+python generate.py --dry-run
+```
+
+6. 本地测试 Web Push：
+
+前提：
+- `.env` 里已经配置 `VAPID_*`
+- 浏览器允许当前站点通知权限
+- Dashboard 上已经开启推送
+
+测试步骤：
+
+```bash
+# 手动发测试推送（推荐先从页面按钮测）
+```
+
+Dashboard 上点击：
+- `开启推送`
+- `发送测试推送`
+
+也可以跑按时间派发脚本：
+
+```bash
+python send_push.py
+```
+
+仅查看当前时间窗口会命中哪些用户：
+
+```bash
+python send_push.py --dry-run
+```
+
+指定交易日：
+
+```bash
+python send_push.py --date 2026-05-07
+```
+
+说明：
+- `已开启推送` 代表浏览器订阅成功
+- `发送测试推送` 或 `python send_push.py` 成功，说明通知已经送达浏览器推送服务
+- macOS / Chrome 当前前台窗口不一定弹出明显横幅，可能只进通知中心
+
+7. 当前 MVP 关于“定时推送”的真实含义：
+
+- 代码已经支持“按用户设置的时间筛选并推送”
+- 但需要外部调度器定时执行 `send_push.py`
+- 例如每 5 分钟执行一次，脚本内部会判断哪些用户此刻到点、且当天还没推过
+
+## 部署建议
+
+线上最小部署建议：
+
+- 1 个 `uvicorn` / `gunicorn+uvicorn` Web 进程
+- 1 个定时任务执行 `generate.py`
+- 1 个定时任务执行 `send_push.py`
+- Nginx 反向代理并启用 HTTPS
+
+### 最小调度建议
+
+共享分析缓存：
+
+```cron
+*/15 8-18 * * 1-5 cd /path/to/dingpan && /path/to/.venv/bin/python generate.py >> logs/generate.log 2>&1
+```
+
+日报 Push：
+
+```cron
+*/5 * * * * cd /path/to/dingpan && /path/to/.venv/bin/python send_push.py >> logs/send_push.log 2>&1
+```
+
+说明：
+- `generate.py` 的频率按你对行情更新的需求调整
+- `send_push.py` 建议每 5 分钟跑一次
+- 脚本内部有用户时间窗口判断和当日去重，不会无限重复推
 
 ## GitHub Actions 部署
 
@@ -122,3 +254,5 @@ Variables:
 - `tool_trade_date_hist_sina` 若未及时覆盖到未来年份，程序会退化为按工作日判断，节假日可能需要人工留意
 - AKShare 上游字段如果变动，可能需要更新字段映射
 - 新闻模块失败时会自动降级为空，不阻断主流程
+- 资金流接口偶发失败时，单只股票共享分析可能写入 `failed`
+- 当前还不是完整 PWA 安装形态，重点先验证 Web 访问与通知 MVP

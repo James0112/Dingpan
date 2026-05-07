@@ -5,7 +5,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from src.schemas import AnalysisResult, MarketData, NewsItem
+from src.schemas import AnalysisResult, CostAnalysis, MarketData, NewsItem
 
 
 def _change_style(change_pct: float) -> tuple[str, str]:
@@ -60,6 +60,7 @@ def render_email(
     output_dir: Path,
     market_data: MarketData,
     analysis: AnalysisResult,
+    cost_analysis: CostAnalysis,
     news_list: list[NewsItem],
     generated_at: datetime,
 ) -> tuple[str, Path, str]:
@@ -111,14 +112,15 @@ def render_email(
         news_badge_color=news_badge_color,
         news_badge_text=news_badge_text,
         news_impact=analysis.news_impact,
-        cost_analysis=analysis.cost_analysis,
+        cost_analysis=cost_analysis.cost_position_analysis,
+        cost_advice=cost_analysis.cost_advice,
         advice_bg=advice_bg,
         advice_border_color=advice_border_color,
         advice_direction=advice_direction,
         section_advice=analysis.action_advice,
         risk_notes=analysis.risk_notes,
-        support_price=analysis.support_price,
-        resistance_price=analysis.resistance_price,
+        support_price=f"{analysis.support_price:.2f}",
+        resistance_price=f"{analysis.resistance_price:.2f}",
         generated_at=generated_at.strftime("%Y-%m-%d %H:%M:%S %Z"),
     )
 

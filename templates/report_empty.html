@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <div class="pill">暂无共享分析缓存</div>
+  <h1 style="margin:18px 0 10px;">{{ stock_code }} 还没有可展示的报告。</h1>
+  <p class="muted" style="max-width:720px;line-height:1.8;">
+    当前订阅模型是 <strong>{{ model_id }}</strong>。先运行批量生成脚本，把 `(stock_code, model_id)` 的共享分析写入 `analysis_cache`，这个页面就会显示真实报告。
+  </p>
+  <div class="row" style="margin-top:18px;">
+    <a class="button secondary" href="/dashboard">返回 Dashboard</a>
+  </div>
+</section>
+{% endblock %}

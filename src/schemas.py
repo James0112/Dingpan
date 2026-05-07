@@ -69,9 +69,17 @@ class AnalysisResult:
     fund_flow_analysis: str
     news_impact: str
     news_sentiment: str
-    cost_analysis: str
     action_advice: str
     risk_notes: list[str]
     bias: str
-    support_price: str
-    resistance_price: str
+    support_price: float
+    resistance_price: float
+
+
+@dataclass(frozen=True)
+class CostAnalysis:
+    cost_status: str
+    pnl_pct: float
+    recovery_pct: float
+    cost_position_analysis: str
+    cost_advice: str

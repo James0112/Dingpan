@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/static/favicon.ico">
+  <title>{{ title }} · 盯盘侠</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-body: #0a0a1a;
+      --bg-surface: #111122;
+      --bg-elevated: #1a1a2e;
+      --bg-header: #0f3460;
+      --border: #2a2a4a;
+      --text-primary: #ffffff;
+      --text-secondary: #c8d6e5;
+      --text-muted: #8ea3bf;
+      --red: #ff4757;
+      --green: #2ed573;
+      --orange: #ffa502;
+      --blue: #5dade2;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(15, 52, 96, 0.45), transparent 35%),
+        linear-gradient(180deg, #090916 0%, #0a0a1a 100%);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+    a { color: inherit; text-decoration: none; }
+    .shell {
+      width: min(100%, 920px);
+      margin: 0 auto;
+      padding: 24px 16px 80px;
+    }
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 18px;
+      margin-bottom: 24px;
+      background: rgba(17, 17, 34, 0.88);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      backdrop-filter: blur(12px);
+    }
+    .brand {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+    }
+    .brand small {
+      display: block;
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      color: var(--blue);
+      margin-bottom: 4px;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+    .button, button {
+      border: 0;
+      border-radius: 12px;
+      padding: 12px 16px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .button.secondary, button.secondary {
+      background: transparent;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+    button:disabled, .button.disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      filter: grayscale(0.15);
+    }
+    .hero, .card {
+      background: rgba(17, 17, 34, 0.88);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 22px;
+    }
+    .hero {
+      padding: 28px 24px;
+      background:
+        linear-gradient(135deg, rgba(15, 52, 96, 0.85), rgba(17, 17, 34, 0.95)),
+        rgba(17, 17, 34, 0.88);
+    }
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+    .grid.two {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+    .muted { color: var(--text-muted); }
+    .section-title {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin: 0 0 14px;
+      font-weight: 700;
+    }
+    .stack { display: grid; gap: 14px; }
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+    .field label {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .field input, .field select {
+      width: 100%;
+      background: #0d1326;
+      color: white;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 14px;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .list {
+      display: grid;
+      gap: 14px;
+    }
+    .stock-card {
+      padding: 18px;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(26, 26, 46, 0.94), rgba(14, 18, 32, 0.92));
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(93, 173, 226, 0.14);
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .message {
+      min-height: 20px;
+      font-size: 14px;
+      color: var(--orange);
+    }
+    @media (max-width: 640px) {
+      .shell { padding: 16px 12px 64px; }
+      .nav { flex-direction: column; align-items: stretch; }
+      .nav-links { justify-content: space-between; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <script src="/static/js/push.js"></script>
+  <div class="shell">
+    <div class="nav">
+      <div class="brand">
+        <small>DINGPAN</small>
+        盯盘侠
+      </div>
+      <div class="nav-links">
+        {% if user %}
+        <a href="/dashboard">首页</a>
+        <a href="/settings">设置</a>
+        <span>{{ user.email }}</span>
+        <button class="secondary" id="logout-button" type="button">退出</button>
+        {% else %}
+        <a href="/">首页</a>
+        <a href="/login">登录</a>
+        <a href="/register">注册</a>
+        {% endif %}
+      </div>
+    </div>
+    {% block content %}{% endblock %}
+  </div>
+  {% if user %}
+  <script>
+    const logoutButton = document.getElementById("logout-button");
+    if (logoutButton) {
+      logoutButton.addEventListener("click", async () => {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        window.location.href = "/";
+      });
+    }
+  </script>
+  {% endif %}
+</body>
+</html>

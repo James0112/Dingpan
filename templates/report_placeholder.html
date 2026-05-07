@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <div class="pill">Phase 1C 占位页</div>
+  <h1 style="margin:18px 0 10px;">{{ stock_code }} 的报告页入口已经接上了。</h1>
+  <p class="muted" style="max-width:720px;line-height:1.8;">
+    当前请求的是 <strong>{{ date_label }}</strong>。下一阶段会把 `analysis_cache`、成本视角和共享分析渲染接到这个页面，而不是只显示占位内容。
+  </p>
+  <div class="row" style="margin-top:18px;">
+    <a class="button secondary" href="/dashboard">返回 Dashboard</a>
+  </div>
+</section>
+{% endblock %}

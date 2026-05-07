@@ -1,37 +1,13 @@
 from __future__ import annotations
 
 import json
-import time
 
-from google import genai
-from google.genai import types
-
+from src.providers import GenerateConfig, get_provider
 from src.schemas import AnalysisResult, MarketData, NewsItem
 
 
 class AnalysisError(RuntimeError):
     pass
-
-
-def _build_cost_block(market_data: MarketData) -> str:
-    if market_data.cost_price <= 0:
-        return """## 成本视角分析要求
-- 当前未配置有效持仓成本
-- cost_analysis 必须输出：未配置持仓成本，跳过成本分析
-- action_advice 不要假设用户的仓位比例、摊薄成本或加仓历史
-"""
-
-    pnl_pct = ((market_data.snapshot.close_price - market_data.cost_price) / market_data.cost_price) * 100
-    return f"""## 成本视角分析要求
-- 当前持仓成本：{market_data.cost_price:.2f}元
-- 当前收盘价：{market_data.snapshot.close_price:.2f}元
-- 当前浮盈/浮亏：{pnl_pct:+.2f}%
-请基于以上数据分析：
-- 当前价距离成本价的偏离程度（深度浮亏 / 接近解套 / 已有浮盈）
-- 成本位是否可能构成上方心理压力或修复目标位
-- 若要回到成本位，还需要多大幅度的修复，这个幅度在当前技术形态下是否合理
-- 当前持仓者更适合等待修复确认，还是避免情绪化操作
-"""
 
 
 def _build_prompt(market_data: MarketData, news_list: list[NewsItem]) -> str:
@@ -43,14 +19,12 @@ def _build_prompt(market_data: MarketData, news_list: list[NewsItem]) -> str:
                 f"- [{item.published_at.strftime('%Y-%m-%d %H:%M')}] {item.title}\n  摘要：{item.summary}"
             )
         news_block = "\n".join(news_lines)
-    cost_block = _build_cost_block(market_data)
 
     return f"""你是一位专业的A股短线分析师。以下是{market_data.stock_name}({market_data.stock_code})的【真实行情数据】，
 所有数字均来自东方财富，请严格基于这些数据分析，不要编造任何价格或时间。
 
 ## 基本信息
 - 股票：{market_data.stock_name} {market_data.stock_code}
-- 持仓成本：{market_data.cost_price:.2f}元
 - 最新交易日：{market_data.latest_trade_date}
 
 ## 当日行情
@@ -76,8 +50,6 @@ def _build_prompt(market_data: MarketData, news_list: list[NewsItem]) -> str:
 ## 近期相关新闻（来自东方财富，已按时间筛选）
 {news_block}
 
-{cost_block}
-
 ## 输出要求
 请严格返回以下 JSON 格式，不要包含 markdown 代码块标记，不要有任何前导或后缀文字：
 {{
@@ -88,17 +60,16 @@ def _build_prompt(market_data: MarketData, news_list: list[NewsItem]) -> str:
   "fund_flow_analysis": "2-3句话解读主力资金意图",
   "news_impact": "2-3句话总结近期新闻对股价的潜在影响；如果新闻为空，输出近期无重大新闻",
   "news_sentiment": "positive 或 negative 或 neutral",
-  "cost_analysis": "1段结合成本价分析修复难度、成本位意义和当前持仓应对",
   "action_advice": "面向已有持仓者的操作建议，可补一句未持仓者是否适合追高或等待确认",
   "risk_notes": ["风险1", "风险2"],
   "bias": "bullish 或 bearish 或 neutral",
-  "support_price": "支撑价位",
-  "resistance_price": "压力价位"
+  "support_price": 10.20,
+  "resistance_price": 10.95
 }}
 
 ## 约束规则（必须遵守）
 1. 若数据不足以支持明确方向，bias 输出 "neutral"，建议输出"观望"
-2. support_price/resistance_price 必须基于均线、近5日高低点或收盘价附近推导，不要虚构远端价位
+2. support_price/resistance_price 必须输出纯数字，基于均线、近5日高低点或收盘价附近推导，不要虚构远端价位，也不要输出“10.2附近”这类文字
 3. 不要使用"必涨""必跌""大概率涨停"等确定性表达
 4. 操作建议使用稳健措辞：持有观察、逢高减仓、不追高、若回踩XX企稳可考虑低吸、观望等待
 5. technical_signals 数组长度 2-4 条
@@ -106,11 +77,26 @@ def _build_prompt(market_data: MarketData, news_list: list[NewsItem]) -> str:
 7. executive_summary 负责整体判断，不重复具体数字；market_review 负责盘面节奏，可写具体价格和走势细节
 8. 新闻解读必须基于给定新闻列表，不要编造不存在的事件、政策、财报或产业逻辑
 9. 不要假设用户的仓位比例、现金比例、摊薄成本或加仓历史
-10. 只返回 JSON，不要包含任何其他文字
+10. 这是股票级共享分析，不要引用任何特定持仓成本或个人交易背景
+11. 只返回 JSON，不要包含任何其他文字
 """
 
 
-def _parse_response(raw_text: str) -> AnalysisResult:
+def _fallback_price(market_data: MarketData, field_name: str) -> float:
+    if field_name == "support_price":
+        return min(market_data.indicators.ma20, market_data.snapshot.low_price)
+    return max(market_data.indicators.ma5, market_data.snapshot.high_price)
+
+
+def _coerce_price(payload: dict[str, object], field_name: str, market_data: MarketData) -> float:
+    raw_value = payload.get(field_name)
+    try:
+        return float(raw_value)
+    except (TypeError, ValueError):
+        return _fallback_price(market_data, field_name)
+
+
+def _parse_response(raw_text: str, market_data: MarketData) -> AnalysisResult:
     try:
         payload = json.loads(raw_text)
     except json.JSONDecodeError as exc:
@@ -124,7 +110,6 @@ def _parse_response(raw_text: str) -> AnalysisResult:
         "fund_flow_analysis",
         "news_impact",
         "news_sentiment",
-        "cost_analysis",
         "action_advice",
         "risk_notes",
         "bias",
@@ -156,17 +141,17 @@ def _parse_response(raw_text: str) -> AnalysisResult:
         fund_flow_analysis=str(payload["fund_flow_analysis"]).strip(),
         news_impact=str(payload["news_impact"]).strip(),
         news_sentiment=news_sentiment,
-        cost_analysis=str(payload["cost_analysis"]).strip(),
         action_advice=str(payload["action_advice"]).strip(),
         risk_notes=[str(item).strip() for item in risk_notes],
         bias=bias,
-        support_price=str(payload["support_price"]).strip(),
-        resistance_price=str(payload["resistance_price"]).strip(),
+        support_price=_coerce_price(payload, "support_price", market_data),
+        resistance_price=_coerce_price(payload, "resistance_price", market_data),
     )
 
 
 def analyze_market_data(
     api_key: str,
+    model_id: str,
     model_name: str,
     market_data: MarketData,
     news_list: list[NewsItem],
@@ -175,34 +160,15 @@ def analyze_market_data(
     if not api_key:
         raise AnalysisError("GEMINI_API_KEY is required")
 
-    client = genai.Client(api_key=api_key)
     prompt = _build_prompt(market_data, news_list)
-    config = types.GenerateContentConfig(
-        temperature=0.4,
-        max_output_tokens=2500,
-        response_mime_type="application/json",
+    provider = get_provider(
+        model_id,
+        api_key=api_key,
+        model_name=model_name,
+        fallback_model_name=fallback_model_name,
     )
-
-    models = [model_name]
-    if fallback_model_name and fallback_model_name != model_name:
-        models.append(fallback_model_name)
-
-    attempts = 3
-    last_error: Exception | None = None
-    errors: list[str] = []
-    for model in models:
-        for attempt in range(attempts):
-            try:
-                response = client.models.generate_content(
-                    model=model,
-                    contents=prompt,
-                    config=config,
-                )
-                return _parse_response(response.text)
-            except Exception as exc:  # pragma: no cover - SDK/runtime dependent
-                last_error = exc
-                errors.append(f"{model} attempt {attempt + 1}: {exc}")
-                if attempt < attempts - 1:
-                    time.sleep(2**attempt)
-                continue
-    raise AnalysisError(f"Gemini analysis failed after retries: {' | '.join(errors)}") from last_error
+    try:
+        raw_text = provider.generate(prompt, GenerateConfig())
+    except Exception as exc:  # pragma: no cover - provider/runtime dependent
+        raise AnalysisError(f"{model_id} analysis failed: {exc}") from exc
+    return _parse_response(raw_text, market_data)

@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 
 from src.analyze import AnalysisError, analyze_market_data
 from src.config import load_settings
+from src.cost_engine import generate_cost_analysis
 from src.fetch_data import DataFetchError, fetch_market_data
 from src.fetch_news import fetch_news
 from src.logger import configure_logging
@@ -104,6 +105,7 @@ def main() -> int:
     try:
         analysis = analyze_market_data(
             api_key=settings.gemini_api_key or "",
+            model_id=settings.model_id,
             model_name=settings.model_name,
             market_data=market_data,
             news_list=news_list,
@@ -114,11 +116,23 @@ def main() -> int:
         logger.error("Analysis failed: %s", exc)
         return 1
 
+    cost_analysis = generate_cost_analysis(
+        close_price=market_data.snapshot.close_price,
+        cost_price=market_data.cost_price,
+        support_price=analysis.support_price,
+        resistance_price=analysis.resistance_price,
+        ma5=market_data.indicators.ma5,
+        ma10=market_data.indicators.ma10,
+        ma20=market_data.indicators.ma20,
+        bias=analysis.bias,
+    )
+
     subject, html_path, html_content = render_email(
         template_path=settings.template_path,
         output_dir=settings.output_dir,
         market_data=market_data,
         analysis=analysis,
+        cost_analysis=cost_analysis,
         news_list=news_list,
         generated_at=now,
     )

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <p class="section-title">设置页占位</p>
+  <div class="stack">
+    <div>
+      <div class="muted">当前账户</div>
+      <div style="font-size:20px;font-weight:800;">{{ user.email }}</div>
+    </div>
+    <div>
+      <div class="muted">后续会接入的模型配置</div>
+      <div class="list" style="margin-top:12px;">
+        {% for model in models %}
+        <div class="stock-card">
+          <div style="font-size:16px;font-weight:700;">{{ model.display_name }}</div>
+          <div class="muted" style="margin-top:6px;">{{ model.model_id }} · {{ model.points_per_call }} 点/次</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
