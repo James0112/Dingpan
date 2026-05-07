@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "盯盘侠 DingPan",
-  "short_name": "盯盘侠",
+  "name": "DingPan",
+  "short_name": "DingPan",
   "description": "多用户股票日报与 Web Push 提醒服务。",
   "lang": "zh-CN",
   "dir": "ltr",
