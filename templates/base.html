@@ -3,7 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" href="/static/favicon.ico">
+  <meta name="description" content="盯盘侠：多用户股票日报、持仓分析与 Web Push 提醒。">
+  <meta name="theme-color" content="#0f3460">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="盯盘侠">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="manifest" href="/static/manifest.json">
   <title>{{ title }} · 盯盘侠</title>
   <style>
     :root {
@@ -164,6 +172,24 @@
       font-size: 14px;
       color: var(--orange);
     }
+    .install-banner {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      border: 1px solid rgba(93, 173, 226, 0.28);
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(15, 52, 96, 0.6), rgba(17, 17, 34, 0.9));
+    }
+    .install-banner[hidden] {
+      display: none;
+    }
+    .install-banner p {
+      margin: 0;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      font-size: 14px;
+    }
     @media (max-width: 640px) {
       .shell { padding: 16px 12px 64px; }
       .nav { flex-direction: column; align-items: stretch; }
@@ -172,6 +198,7 @@
   </style>
 </head>
 <body>
+  <script src="/static/js/app.js"></script>
   <script src="/static/js/push.js"></script>
   <div class="shell">
     <div class="nav">
@@ -192,6 +219,12 @@
         {% endif %}
       </div>
     </div>
+    <section class="install-banner" id="install-banner" hidden>
+      <p data-install-text>安装到桌面后，可从独立应用窗口打开并单独开启推送。</p>
+      <div class="row">
+        <button class="secondary" id="install-button" type="button">安装应用</button>
+      </div>
+    </section>
     {% block content %}{% endblock %}
   </div>
   {% if user %}

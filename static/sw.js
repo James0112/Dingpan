@@ -22,6 +22,9 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
+      icon: "/static/icons/icon-192.png",
+      badge: "/static/icons/icon-192.png",
+      tag: "dingpan-report",
       data: {
         url: payload.url || "/dashboard"
       }
@@ -32,5 +35,17 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const targetUrl = event.notification.data?.url || "/dashboard";
-  event.waitUntil(clients.openWindow(targetUrl));
+  event.waitUntil((async () => {
+    const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of windowClients) {
+      if ("focus" in client) {
+        await client.focus();
+        if ("navigate" in client) {
+          await client.navigate(targetUrl);
+        }
+        return;
+      }
+    }
+    await clients.openWindow(targetUrl);
+  })());
 });
