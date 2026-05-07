@@ -2,7 +2,7 @@ name: DingPan Daily Report
 
 on:
   schedule:
-    - cron: "0 0 * * 1-5"
+    - cron: "36 0 * * 1-5"
   workflow_dispatch:
     inputs:
       send_email:
