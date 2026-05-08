@@ -71,7 +71,8 @@ async function ensureServiceWorker() {
     throw new Error("当前浏览器不支持 Service Worker");
   }
   try {
-    const registration = await navigator.serviceWorker.register("/sw.js");
+    const version = window.DINGPAN_ASSET_VERSION ? `?v=${encodeURIComponent(window.DINGPAN_ASSET_VERSION)}` : "";
+    const registration = await navigator.serviceWorker.register(`/sw.js${version}`);
     await registration.update();
     return await navigator.serviceWorker.ready;
   } catch (error) {

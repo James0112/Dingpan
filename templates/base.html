@@ -9,10 +9,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="{% if 'zh' in request.headers.get('accept-language', '').lower() %}盯盘侠{% else %}DingPan{% endif %}">
-  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
-  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png?v={{ asset_version }}">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png?v={{ asset_version }}">
+  <link rel="manifest" href="/manifest.webmanifest?v={{ asset_version }}">
   <title>{{ title }} · 盯盘侠</title>
+  <script>window.DINGPAN_ASSET_VERSION = "{{ asset_version }}";</script>
   <script>
     (function () {
       var storageKey = "dingpan-theme";
@@ -421,8 +422,8 @@
 <body>
   {% set current_path = request.url.path %}
   {% set is_report_page = current_path.startswith('/report/') %}
-  <script src="/static/js/app.js"></script>
-  <script src="/static/js/push.js"></script>
+  <script src="/static/js/app.js?v={{ asset_version }}"></script>
+  <script src="/static/js/push.js?v={{ asset_version }}"></script>
   <div class="shell">
     {% if not is_report_page %}
     <nav class="nav" aria-label="主导航">

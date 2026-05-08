@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
+import subprocess
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.concurrency import run_in_threadpool
@@ -44,11 +45,26 @@ settings = load_settings()
 app = FastAPI(title="DingPan", version="0.1.0")
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent / "templates"))
 static_dir = Path(__file__).resolve().parent / "static"
+project_root = Path(__file__).resolve().parent
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 RATE_LIMIT_BUCKETS: dict[str, list[float]] = defaultdict(list)
 VERIFY_EMAIL_TOKEN_TTL_HOURS = 24
 RESET_PASSWORD_TOKEN_TTL_MINUTES = 60
 EMAIL_RESEND_INTERVAL_SECONDS = 60
+
+
+def _resolve_asset_version() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(project_root),
+            text=True,
+        ).strip()
+    except Exception:
+        return str(int((project_root / "app.py").stat().st_mtime))
+
+
+ASSET_VERSION = _resolve_asset_version()
 
 
 class RegisterPayload(BaseModel):
@@ -148,7 +164,25 @@ def _preferred_app_name(request: Request) -> str:
 
 
 def _template_context(request: Request, **extra: object) -> dict[str, object]:
-    return {"app_display_name": _preferred_app_name(request), **extra}
+    return {"app_display_name": _preferred_app_name(request), "asset_version": ASSET_VERSION, **extra}
+
+
+@app.middleware("http")
+async def cache_control_middleware(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    content_type = response.headers.get("content-type", "")
+
+    if content_type.startswith("text/html"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    elif path in {"/sw.js", "/manifest.webmanifest"}:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+
+    return response
 
 
 def _require_mailer_config() -> None:
@@ -314,7 +348,15 @@ async def startup_event() -> None:
 
 @app.get("/sw.js")
 async def service_worker() -> FileResponse:
-    return FileResponse(static_dir / "sw.js", media_type="application/javascript")
+    return FileResponse(
+        static_dir / "sw.js",
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
+    )
 
 
 @app.get("/manifest.webmanifest")
@@ -350,7 +392,12 @@ async def web_manifest(request: Request) -> JSONResponse:
             ],
         },
         media_type="application/manifest+json",
-        headers={"Vary": "Accept-Language"},
+        headers={
+            "Vary": "Accept-Language",
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+        },
     )
 
 
