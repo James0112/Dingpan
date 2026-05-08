@@ -2,9 +2,9 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="盯盘侠：多用户股票日报、持仓分析与 Web Push 提醒。">
-  <meta name="theme-color" content="#0f3460">
+  <meta name="theme-color" content="#f5f5f7">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,38 +13,103 @@
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
   <link rel="manifest" href="/manifest.webmanifest">
   <title>{{ title }} · 盯盘侠</title>
+  <script>
+    (function () {
+      var storageKey = "dingpan-theme";
+      var raw = null;
+      try {
+        raw = window.localStorage.getItem(storageKey);
+      } catch (error) {
+        raw = null;
+      }
+
+      var choice = raw || "system";
+      var isDark = choice === "dark" || (choice === "system" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      var resolvedTheme = isDark ? "dark" : "light";
+      var root = document.documentElement;
+      root.setAttribute("data-theme", resolvedTheme);
+      root.setAttribute("data-theme-choice", choice);
+
+      var themeMeta = document.querySelector('meta[name="theme-color"]');
+      if (themeMeta) {
+        themeMeta.setAttribute("content", isDark ? "#121212" : "#f5f5f7");
+      }
+    })();
+  </script>
   <style>
     :root {
+      --bg-body: #f5f5f7;
+      --bg-surface: rgba(255, 255, 255, 0.94);
+      --bg-elevated: #ffffff;
+      --bg-accent: linear-gradient(135deg, rgba(59, 130, 246, 0.14), rgba(14, 165, 233, 0.08));
+      --border-color: #e5e7eb;
+      --border-focus: #3b82f6;
+      --text-primary: #111827;
+      --text-secondary: #6b7280;
+      --text-muted: #9ca3af;
+      --color-up: #dc4a4a;
+      --color-down: #22a55b;
+      --color-cost: #e8920b;
+      --color-primary: #2563eb;
+      --color-primary-strong: #1d4ed8;
+      --shadow-soft: 0 18px 40px rgba(15, 23, 42, 0.08);
+      --tab-bar-height: 64px;
+      --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+      --page-bottom-spacing: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 16px);
+      --border: var(--border-color);
+      --blue: var(--color-primary);
+      --orange: var(--color-cost);
+      --red: var(--color-up);
+      --green: var(--color-down);
+      --bg-header: var(--color-primary-strong);
+      color-scheme: light;
+    }
+
+    [data-theme="dark"] {
+      --bg-body: #121212;
+      --bg-surface: rgba(30, 30, 30, 0.94);
+      --bg-elevated: #2a2a2a;
+      --bg-accent: linear-gradient(135deg, rgba(37, 99, 235, 0.42), rgba(17, 24, 39, 0.98));
+      --border-color: #333333;
+      --border-focus: #60a5fa;
+      --text-primary: #e5e5e5;
+      --text-secondary: #a3a3a3;
+      --text-muted: #737373;
+      --color-up: #ef6b6b;
+      --color-down: #4ade80;
+      --color-cost: #fbbf24;
+      --color-primary: #60a5fa;
+      --color-primary-strong: #3b82f6;
+      --shadow-soft: 0 24px 54px rgba(0, 0, 0, 0.34);
+      --border: var(--border-color);
+      --blue: var(--color-primary);
+      --orange: var(--color-cost);
+      --red: var(--color-up);
+      --green: var(--color-down);
+      --bg-header: var(--color-primary-strong);
       color-scheme: dark;
-      --bg-body: #0a0a1a;
-      --bg-surface: #111122;
-      --bg-elevated: #1a1a2e;
-      --bg-header: #0f3460;
-      --border: #2a2a4a;
-      --text-primary: #ffffff;
-      --text-secondary: #c8d6e5;
-      --text-muted: #8ea3bf;
-      --red: #ff4757;
-      --green: #2ed573;
-      --orange: #ffa502;
-      --blue: #5dade2;
     }
 
     * { box-sizing: border-box; }
+    html {
+      background: var(--bg-body);
+    }
     body {
       margin: 0;
       font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
       background:
-        radial-gradient(circle at top, rgba(15, 52, 96, 0.45), transparent 35%),
-        linear-gradient(180deg, #090916 0%, #0a0a1a 100%);
+        radial-gradient(circle at top, rgba(37, 99, 235, 0.12), transparent 32%),
+        linear-gradient(180deg, rgba(14, 165, 233, 0.04), transparent 28%),
+        var(--bg-body);
       color: var(--text-primary);
       min-height: 100vh;
+      min-height: 100dvh;
     }
     a { color: inherit; text-decoration: none; }
     .shell {
-      width: min(100%, 920px);
+      width: min(100%, 672px);
       margin: 0 auto;
-      padding: 24px 16px 80px;
+      padding: 24px 16px 40px;
     }
     .nav {
       display: flex;
@@ -53,10 +118,11 @@
       gap: 16px;
       padding: 16px 18px;
       margin-bottom: 24px;
-      background: rgba(17, 17, 34, 0.88);
-      border: 1px solid var(--border);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
       border-radius: 18px;
       backdrop-filter: blur(12px);
+      box-shadow: var(--shadow-soft);
     }
     .brand {
       font-size: 20px;
@@ -67,30 +133,48 @@
       display: block;
       font-size: 12px;
       letter-spacing: 0.18em;
-      color: var(--blue);
+      color: var(--color-primary);
       margin-bottom: 4px;
     }
-    .nav-links {
+    .nav-links,
+    .nav-actions {
       display: flex;
       align-items: center;
       gap: 14px;
       color: var(--text-secondary);
       font-size: 14px;
     }
+    .nav-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 0 4px;
+      border-radius: 10px;
+    }
+    .nav-link.active {
+      color: var(--text-primary);
+      font-weight: 700;
+    }
     .button, button {
       border: 0;
       border-radius: 12px;
       padding: 12px 16px;
-      background: #2563eb;
+      background: var(--color-primary);
       color: white;
       cursor: pointer;
       font-size: 14px;
       font-weight: 700;
     }
     .button.secondary, button.secondary {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+    }
+    .button.ghost, button.ghost {
       background: transparent;
       color: var(--text-secondary);
-      border: 1px solid var(--border);
+      border: 1px solid var(--border-color);
     }
     button:disabled, .button.disabled {
       opacity: 0.45;
@@ -98,16 +182,15 @@
       filter: grayscale(0.15);
     }
     .hero, .card {
-      background: rgba(17, 17, 34, 0.88);
-      border: 1px solid var(--border);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
       border-radius: 20px;
       padding: 22px;
+      box-shadow: var(--shadow-soft);
     }
     .hero {
       padding: 28px 24px;
-      background:
-        linear-gradient(135deg, rgba(15, 52, 96, 0.85), rgba(17, 17, 34, 0.95)),
-        rgba(17, 17, 34, 0.88);
+      background: var(--bg-accent);
     }
     .grid {
       display: grid;
@@ -132,14 +215,29 @@
       font-size: 13px;
       color: var(--text-secondary);
     }
-    .field input, .field select {
+    .field input, .field select, textarea, input, select {
       width: 100%;
-      background: #0d1326;
-      color: white;
-      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
       border-radius: 12px;
       padding: 12px 14px;
       font-size: 14px;
+      appearance: none;
+    }
+    .field input::placeholder, textarea::placeholder, input::placeholder {
+      color: var(--text-muted);
+    }
+    .field input:focus, .field select:focus, textarea:focus, input:focus, select:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+    }
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--color-primary);
+      flex: 0 0 auto;
     }
     .row {
       display: flex;
@@ -154,23 +252,26 @@
     .stock-card {
       padding: 18px;
       border-radius: 18px;
-      border: 1px solid var(--border);
-      background: linear-gradient(180deg, rgba(26, 26, 46, 0.94), rgba(14, 18, 32, 0.92));
+      border: 1px solid var(--border-color);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 244, 246, 0.92));
+    }
+    [data-theme="dark"] .stock-card {
+      background: linear-gradient(180deg, rgba(42, 42, 42, 0.98), rgba(24, 24, 27, 0.94));
     }
     .pill {
       display: inline-flex;
       align-items: center;
       padding: 4px 10px;
       border-radius: 999px;
-      background: rgba(93, 173, 226, 0.14);
-      color: var(--blue);
+      background: rgba(59, 130, 246, 0.12);
+      color: var(--color-primary);
       font-size: 12px;
       font-weight: 700;
     }
     .message {
       min-height: 20px;
       font-size: 14px;
-      color: var(--orange);
+      color: var(--color-cost);
     }
     .modal-backdrop {
       position: fixed;
@@ -188,12 +289,12 @@
       right: 12px;
       bottom: 12px;
       margin: 0 auto;
-      width: min(100%, 920px);
-      background: linear-gradient(180deg, rgba(20, 23, 42, 0.98), rgba(10, 10, 26, 0.98));
-      border: 1px solid rgba(93, 173, 226, 0.22);
+      width: min(100%, 672px);
+      background: var(--bg-elevated);
+      border: 1px solid rgba(59, 130, 246, 0.22);
       border-radius: 24px;
       padding: 18px;
-      box-shadow: 0 28px 60px rgba(0, 0, 0, 0.34);
+      box-shadow: var(--shadow-soft);
     }
     .sheet-header {
       display: flex;
@@ -218,16 +319,16 @@
       left: 12px;
       right: 12px;
       bottom: 12px;
-      z-index: 40;
+      z-index: 60;
       display: grid;
       gap: 10px;
-      max-width: 920px;
+      max-width: 672px;
       margin: 0 auto;
       padding: 14px 16px;
-      border: 1px solid rgba(93, 173, 226, 0.28);
+      border: 1px solid rgba(59, 130, 246, 0.24);
       border-radius: 18px;
-      background: linear-gradient(135deg, rgba(15, 52, 96, 0.92), rgba(17, 17, 34, 0.97));
-      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+      background: var(--bg-elevated);
+      box-shadow: var(--shadow-soft);
       backdrop-filter: blur(12px);
     }
     .install-banner[hidden] {
@@ -239,14 +340,68 @@
       line-height: 1.6;
       font-size: 14px;
     }
+    .mobile-tab-nav {
+      display: none;
+    }
+    .mobile-tab-bar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 50;
+      display: none;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      align-items: center;
+      padding: 10px 12px calc(10px + var(--safe-area-bottom));
+      background: var(--bg-elevated);
+      border-top: 1px solid var(--border-color);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 -10px 36px rgba(15, 23, 42, 0.12);
+    }
+    .tab-link,
+    .tab-action {
+      min-height: 44px;
+      display: grid;
+      place-items: center;
+      padding: 0 8px;
+      border-radius: 14px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 700;
+      border: 1px solid transparent;
+      background: transparent;
+    }
+    .tab-link.active,
+    .tab-action.active {
+      color: var(--text-primary);
+      background: rgba(59, 130, 246, 0.10);
+      border-color: rgba(59, 130, 246, 0.14);
+    }
+    .theme-toggle {
+      white-space: nowrap;
+    }
+    body.keyboard-open .mobile-tab-bar,
+    body.keyboard-open .install-banner {
+      display: none !important;
+    }
     @media (max-width: 640px) {
-      .shell { padding: 16px 12px 64px; }
-      .nav { flex-direction: column; align-items: stretch; }
-      .nav-links { justify-content: space-between; width: 100%; }
+      .shell {
+        padding: 16px 12px var(--page-bottom-spacing);
+      }
+      .nav {
+        display: none;
+      }
+      .mobile-tab-nav {
+        display: block;
+      }
+      .mobile-tab-bar {
+        display: grid;
+      }
       .install-banner {
         left: 10px;
         right: 10px;
-        bottom: 10px;
+        bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 8px);
         border-radius: 16px;
       }
       .sheet {
@@ -260,26 +415,44 @@
   </style>
 </head>
 <body>
+  {% set current_path = request.url.path %}
   <script src="/static/js/app.js"></script>
   <script src="/static/js/push.js"></script>
   <div class="shell">
-    <div class="nav">
+    <nav class="nav" aria-label="主导航">
       <div class="brand">
         <small>DINGPAN</small>
         盯盘侠
       </div>
-      <div class="nav-links">
+      <div class="nav-actions">
         {% if user %}
-        <a href="/dashboard">首页</a>
-        <a href="/settings">设置</a>
+        <a class="nav-link{% if current_path == '/dashboard' %} active{% endif %}" href="/dashboard">首页</a>
+        <a class="nav-link{% if current_path == '/settings' %} active{% endif %}" href="/settings">设置</a>
+        <button class="ghost theme-toggle" type="button" data-theme-toggle>主题：跟随系统</button>
         <span>{{ user.email }}</span>
         <button class="secondary" id="logout-button" type="button">退出</button>
         {% else %}
-        <a href="/">首页</a>
-        <a href="/login">登录</a>
-        <a href="/register">注册</a>
+        <a class="nav-link{% if current_path == '/' %} active{% endif %}" href="/">首页</a>
+        <a class="nav-link{% if current_path == '/login' %} active{% endif %}" href="/login">登录</a>
+        <a class="nav-link{% if current_path == '/register' %} active{% endif %}" href="/register">注册</a>
+        <button class="ghost theme-toggle" type="button" data-theme-toggle>主题：跟随系统</button>
         {% endif %}
       </div>
+    </nav>
+    <div class="mobile-tab-nav">
+      <nav class="mobile-tab-bar" aria-label="移动端底部导航">
+        {% if user %}
+        <a class="tab-link{% if current_path == '/dashboard' %} active{% endif %}" href="/dashboard">首页</a>
+        <a class="tab-link{% if current_path == '/settings' %} active{% endif %}" href="/settings">设置</a>
+        <button class="tab-action" type="button" data-theme-toggle>主题</button>
+        <button class="tab-action" id="logout-button-mobile" type="button">退出</button>
+        {% else %}
+        <a class="tab-link{% if current_path == '/' %} active{% endif %}" href="/">首页</a>
+        <a class="tab-link{% if current_path == '/login' %} active{% endif %}" href="/login">登录</a>
+        <a class="tab-link{% if current_path == '/register' %} active{% endif %}" href="/register">注册</a>
+        <button class="tab-action" type="button" data-theme-toggle>主题</button>
+        {% endif %}
+      </nav>
     </div>
     <section class="install-banner" id="install-banner" hidden>
       <p data-install-text>安装到桌面后，可从独立应用窗口打开并单独开启推送。</p>
@@ -292,15 +465,21 @@
   </div>
   {% if user %}
   <script>
-    const logoutButton = document.getElementById("logout-button");
-    if (logoutButton) {
-      logoutButton.addEventListener("click", async () => {
+    async function handleLogout() {
         await fetch("/api/auth/logout", {
           method: "POST",
           headers: { "Content-Type": "application/json" }
         });
         window.location.href = "/";
-      });
+    }
+
+    const logoutButton = document.getElementById("logout-button");
+    const mobileLogoutButton = document.getElementById("logout-button-mobile");
+    if (logoutButton) {
+      logoutButton.addEventListener("click", handleLogout);
+    }
+    if (mobileLogoutButton) {
+      mobileLogoutButton.addEventListener("click", handleLogout);
     }
   </script>
   {% endif %}

@@ -1,8 +1,111 @@
 let deferredInstallPrompt = null;
 const INSTALL_BANNER_DISMISSED_KEY = "dingpan_install_banner_dismissed";
+const THEME_STORAGE_KEY = "dingpan-theme";
+const THEME_COLOR_LIGHT = "#f5f5f7";
+const THEME_COLOR_DARK = "#121212";
+let themeMediaQuery = null;
 
 function isStandaloneMode() {
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function getStoredThemeChoice() {
+  try {
+    return window.localStorage.getItem(THEME_STORAGE_KEY) || "system";
+  } catch (error) {
+    return "system";
+  }
+}
+
+function resolveTheme(choice) {
+  if (choice === "dark") {
+    return "dark";
+  }
+  if (choice === "light") {
+    return "light";
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function themeLabel(choice) {
+  if (choice === "light") {
+    return "主题：浅色";
+  }
+  if (choice === "dark") {
+    return "主题：深色";
+  }
+  return "主题：跟随系统";
+}
+
+function updateThemeMeta(resolvedTheme) {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    meta.setAttribute("content", resolvedTheme === "dark" ? THEME_COLOR_DARK : THEME_COLOR_LIGHT);
+  }
+}
+
+function applyTheme(choice) {
+  const resolvedTheme = resolveTheme(choice);
+  const root = document.documentElement;
+  root.setAttribute("data-theme", resolvedTheme);
+  root.setAttribute("data-theme-choice", choice);
+  updateThemeMeta(resolvedTheme);
+
+  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+    button.textContent = window.matchMedia("(max-width: 640px)").matches ? themeLabel(choice).replace("主题：", "") : themeLabel(choice);
+    button.dataset.themeChoice = choice;
+  });
+}
+
+function persistTheme(choice) {
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, choice);
+  } catch (error) {
+    // Ignore localStorage write failures in private mode.
+  }
+}
+
+function cycleThemeChoice() {
+  const current = document.documentElement.getAttribute("data-theme-choice") || "system";
+  if (current === "system") {
+    return "light";
+  }
+  if (current === "light") {
+    return "dark";
+  }
+  return "system";
+}
+
+function syncThemeFromSystem() {
+  const choice = document.documentElement.getAttribute("data-theme-choice") || "system";
+  if (choice === "system") {
+    applyTheme("system");
+  }
+}
+
+function bindThemeToggle() {
+  document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextChoice = cycleThemeChoice();
+      persistTheme(nextChoice);
+      applyTheme(nextChoice);
+    });
+  });
+}
+
+function bindViewportKeyboardBehavior() {
+  if (!window.visualViewport) {
+    return;
+  }
+
+  const updateKeyboardState = () => {
+    const keyboardOpen = window.visualViewport.height < window.innerHeight * 0.75;
+    document.body.classList.toggle("keyboard-open", keyboardOpen);
+  };
+
+  window.visualViewport.addEventListener("resize", updateKeyboardState);
+  window.visualViewport.addEventListener("scroll", updateKeyboardState);
+  updateKeyboardState();
 }
 
 function ensureInstallBanner() {
@@ -56,6 +159,19 @@ window.addEventListener("appinstalled", () => {
 });
 
 window.addEventListener("DOMContentLoaded", () => {
+  applyTheme(getStoredThemeChoice());
+  bindThemeToggle();
+  bindViewportKeyboardBehavior();
+
+  if (window.matchMedia) {
+    themeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (typeof themeMediaQuery.addEventListener === "function") {
+      themeMediaQuery.addEventListener("change", syncThemeFromSystem);
+    } else if (typeof themeMediaQuery.addListener === "function") {
+      themeMediaQuery.addListener(syncThemeFromSystem);
+    }
+  }
+
   const installButton = document.getElementById("install-button");
   const dismissButton = document.getElementById("install-dismiss-button");
   if (installButton) {
