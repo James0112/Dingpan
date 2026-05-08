@@ -3,7 +3,7 @@
 {% block content %}
 <style>
   .landing-shell {
-    min-height: calc(100dvh - 180px);
+    min-height: calc(100dvh - 140px);
     display: grid;
     place-items: center;
   }
@@ -13,13 +13,17 @@
     text-align: center;
     display: grid;
     gap: 18px;
-    padding: 40px 0 56px;
+    justify-items: center;
+    padding: 24px 0 40px;
   }
   .landing-hero h1 {
     margin: 0;
     font-size: clamp(36px, 6vw, 56px);
     line-height: 1.04;
     letter-spacing: -0.04em;
+  }
+  .landing-hero h1 span {
+    display: block;
   }
   .landing-hero p {
     margin: 0 auto;
@@ -37,25 +41,27 @@
   }
   @media (max-width: 640px) {
     .landing-shell {
-      min-height: calc(100dvh - 140px);
+      min-height: calc(100dvh - 132px);
     }
     .landing-hero {
-      padding: 24px 0 40px;
-      text-align: left;
+      max-width: 340px;
+      text-align: center;
+      justify-items: center;
+      padding: 12px 0 24px;
     }
     .landing-hero p {
-      margin: 0;
+      margin: 0 auto;
       font-size: 16px;
     }
     .landing-actions {
-      justify-content: flex-start;
+      justify-content: center;
     }
   }
 </style>
 
 <section class="landing-shell">
   <div class="landing-hero">
-    <h1>每日 AI 持仓分析，收盘后自动送达</h1>
+    <h1><span>每日 AI 持仓分析</span><span>收盘后自动送达</span></h1>
     <p>添加自选股后，系统会在每日收盘后自动分析，并把报告发送到你的邮箱。</p>
     <div class="landing-actions">
       <a class="button" href="/register">立即注册</a>
