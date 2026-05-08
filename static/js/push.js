@@ -5,6 +5,24 @@ async function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
+function formatPushError(error, fallbackMessage) {
+  const message = String(error?.message || fallbackMessage || "推送操作失败");
+  const name = String(error?.name || "");
+  if (/Registration failed - push service error/i.test(message)) {
+    return "浏览器创建系统推送通道失败。请先关闭 VPN 后重试，并确认 Chrome 与 Google Play 服务可正常连接推送服务。";
+  }
+  if (/AbortError/i.test(name) || /aborted/i.test(message)) {
+    return "浏览器中断了推送订阅。请稍后重试。";
+  }
+  if (/NotAllowedError/i.test(name) || /denied/i.test(message)) {
+    return "通知权限未授予，或系统限制了浏览器通知。请先检查系统通知设置。";
+  }
+  if (/InvalidStateError/i.test(name)) {
+    return "当前浏览器推送状态异常。请删除主屏幕图标后重新安装，再次开启推送。";
+  }
+  return message;
+}
+
 async function getExistingSubscription() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     return null;
@@ -52,8 +70,13 @@ async function ensureServiceWorker() {
   if (!("serviceWorker" in navigator)) {
     throw new Error("当前浏览器不支持 Service Worker");
   }
-  await navigator.serviceWorker.register("/sw.js");
-  return navigator.serviceWorker.ready;
+  try {
+    const registration = await navigator.serviceWorker.register("/sw.js");
+    await registration.update();
+    return await navigator.serviceWorker.ready;
+  } catch (error) {
+    throw new Error(`Service Worker 注册失败：${formatPushError(error, "浏览器拒绝了 Service Worker 注册")}`);
+  }
 }
 
 async function ensureNotificationPermission() {
@@ -83,10 +106,15 @@ async function subscribePush() {
   if (!vapidResponse.ok) {
     throw new Error(vapidData.detail || "无法获取 VAPID 公钥");
   }
-  const subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: await urlBase64ToUint8Array(vapidData.public_key)
-  });
+  let subscription;
+  try {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: await urlBase64ToUint8Array(vapidData.public_key)
+    });
+  } catch (error) {
+    throw new Error(`浏览器订阅失败：${formatPushError(error, "浏览器未能创建本机推送订阅")}`);
+  }
   const response = await fetch("/api/push/subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -94,7 +122,7 @@ async function subscribePush() {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.detail || "订阅推送失败");
+    throw new Error(`服务器保存订阅失败：${data.detail || "订阅推送失败"}`);
   }
   return subscription;
 }
@@ -127,8 +155,11 @@ async function getPushDiagnostics() {
   return {
     standalone: isStandaloneMode(),
     ios: isIOS(),
+    secure_context: window.isSecureContext,
     notification_permission: getNotificationPermissionState(),
     local_subscription: Boolean(subscription),
+    service_worker_supported: "serviceWorker" in navigator,
+    push_manager_supported: "PushManager" in window,
     server_status: serverStatus,
   };
 }
