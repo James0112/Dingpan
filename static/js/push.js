@@ -9,11 +9,28 @@ async function getExistingSubscription() {
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
     return null;
   }
-  const registration = await navigator.serviceWorker.getRegistration("/sw.js");
-  if (!registration) {
-    return null;
+  const directRegistration = await navigator.serviceWorker.getRegistration();
+  if (directRegistration) {
+    const directSubscription = await directRegistration.pushManager.getSubscription();
+    if (directSubscription) {
+      return directSubscription;
+    }
   }
-  return registration.pushManager.getSubscription();
+  const readyRegistration = await navigator.serviceWorker.ready.catch(() => null);
+  if (readyRegistration) {
+    const readySubscription = await readyRegistration.pushManager.getSubscription();
+    if (readySubscription) {
+      return readySubscription;
+    }
+  }
+  const registrations = await navigator.serviceWorker.getRegistrations().catch(() => []);
+  for (const registration of registrations) {
+    const subscription = await registration.pushManager.getSubscription();
+    if (subscription) {
+      return subscription;
+    }
+  }
+  return null;
 }
 
 function isStandaloneMode() {

@@ -387,12 +387,20 @@
     }
     try {
       const status = await window.DingPanPush.fetchPushStatus();
+      const subscription = await window.DingPanPush.getExistingSubscription().catch(() => null);
+      const localEnabled = Boolean(subscription);
       if (pushStatusLabel) {
-        pushStatusLabel.textContent = status.enabled ? "已开启" : "未开启";
+        if (localEnabled) {
+          pushStatusLabel.textContent = "当前设备已开启";
+        } else if (status.enabled) {
+          pushStatusLabel.textContent = "其他设备已开启";
+        } else {
+          pushStatusLabel.textContent = "未开启";
+        }
       }
-      pushToggle.textContent = status.enabled ? "关闭推送" : "开启推送";
+      pushToggle.textContent = localEnabled ? "关闭推送" : "开启推送";
       if (pushTestButton) {
-        pushTestButton.disabled = !status.configured || !status.enabled;
+        pushTestButton.disabled = !status.configured || !localEnabled;
         if (pushTestButton.disabled) {
           pushTestButton.style.opacity = ".45";
           pushTestButton.style.cursor = "not-allowed";
@@ -400,6 +408,9 @@
           pushTestButton.style.opacity = "";
           pushTestButton.style.cursor = "";
         }
+      }
+      if (!localEnabled && status.enabled) {
+        pushMessage.textContent = "当前账号已有其他设备订阅，但这台设备还没有完成本机订阅。请点击“开启推送”。";
       }
     } catch (error) {
       console.error("Failed to refresh push state:", error);
