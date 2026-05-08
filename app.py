@@ -488,7 +488,7 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
         "dashboard.html",
         _template_context(
             request,
-            title="Dashboard",
+            title="自选",
             user=user,
             subscriptions=subscriptions,
             models=models,
@@ -616,7 +616,7 @@ async def report_page(request: Request, stock_code: str, trade_date: str, user=D
     return templates.TemplateResponse(
         request,
         "report.html",
-        _template_context(request, title="报告页", user=user, **context),
+        _template_context(request, title="报告", user=user, **context),
     )
 
 
@@ -635,7 +635,7 @@ async def settings_page(request: Request, user=Depends(page_user_or_redirect)):
     return templates.TemplateResponse(
         request,
         "settings_placeholder.html",
-        _template_context(request, title="设置", user=user, models=models),
+        _template_context(request, title="我的", user=user, models=models),
     )
 
 

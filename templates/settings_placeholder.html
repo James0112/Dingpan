@@ -1,30 +1,236 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="card">
-  <p class="section-title">账户与安全</p>
-  <div class="stack">
-    <div>
-      <div class="muted">当前账户</div>
-      <div style="font-size:20px;font-weight:800;">{{ user.email }}</div>
-      <div class="muted" style="margin-top:8px;">
-        邮箱状态：
+<style>
+  .settings-shell {
+    max-width: 640px;
+    margin: 0 auto;
+    display: grid;
+    gap: 16px;
+  }
+  .page-title {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+  .page-subtitle {
+    margin: 6px 0 0;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+  .settings-section {
+    display: grid;
+    gap: 12px;
+  }
+  .settings-header {
+    margin: 0;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .settings-item {
+    display: grid;
+    gap: 8px;
+    padding: 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-soft);
+  }
+  .settings-item-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+  }
+  .settings-item-head .secondary {
+    flex: 0 0 auto;
+    min-width: 104px;
+    white-space: nowrap;
+  }
+  .settings-item-title {
+    font-size: 17px;
+    font-weight: 800;
+  }
+  .settings-item-copy {
+    color: var(--text-secondary);
+    line-height: 1.7;
+    font-size: 14px;
+  }
+  .toggle {
+    position: relative;
+    width: 52px;
+    height: 32px;
+    border: 0;
+    border-radius: 999px;
+    background: #cbd5e1;
+    cursor: pointer;
+    padding: 0;
+    flex: 0 0 auto;
+  }
+  .toggle::after {
+    content: "";
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.15);
+  }
+  .toggle.is-on {
+    background: var(--color-primary);
+  }
+  .toggle.is-on::after {
+    left: 24px;
+  }
+  .toggle:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .choice-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .choice-chip {
+    border: 1px solid var(--border-color);
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    padding: 11px 14px;
+    border-radius: 999px;
+    font-weight: 700;
+  }
+  .choice-chip.active {
+    background: rgba(59, 130, 246, 0.10);
+    color: var(--text-primary);
+    border-color: rgba(59, 130, 246, 0.28);
+  }
+  .settings-meta {
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.7;
+    min-height: 20px;
+  }
+  .password-form[hidden] {
+    display: none;
+  }
+  .settings-item-head.password-row {
+    align-items: center;
+  }
+  @media (max-width: 640px) {
+    .settings-item-head {
+      align-items: flex-start;
+    }
+    .settings-item-head.password-row {
+      align-items: center;
+    }
+  }
+</style>
+
+<div class="settings-shell">
+  <section class="settings-section">
+    <h1 class="page-title" style="margin:0;">我的</h1>
+    <p class="page-subtitle">把通知、外观和账户安全收在一个地方，首页只保留看盘本身。</p>
+  </section>
+
+  <section class="settings-section">
+    <p class="settings-header">账户</p>
+    <article class="settings-item">
+      <div class="settings-item-title">{{ user.email }}</div>
+      <div class="settings-item-copy">
         {% if user.email_verified_at %}
-        已验证
+        邮箱已验证，可查看报告并开启通知。
         {% else %}
-        未验证
+        邮箱尚未验证。完成验证后才能查看报告、开启邮件和推送通知。
         {% endif %}
       </div>
       {% if not user.email_verified_at %}
-      <div class="row" style="margin-top:12px;">
+      <div class="row">
         <button class="secondary" type="button" id="resend-verification-button">重新发送验证邮件</button>
       </div>
-      <div class="message" id="verification-message"></div>
+      <div class="settings-meta" id="verification-message"></div>
       {% endif %}
-    </div>
-    <div class="card">
-      <p class="section-title">修改密码</p>
-      <form class="stack" id="change-password-form">
+    </article>
+  </section>
+
+  <section class="settings-section">
+    <p class="settings-header">通知</p>
+    <article class="settings-item">
+      <div class="settings-item-head">
+        <div>
+          <div class="settings-item-title">每日报告邮件</div>
+          <div class="settings-item-copy">收盘后将报告发送到注册邮箱。</div>
+        </div>
+        <button
+          class="toggle{% if user.daily_email_enabled %} is-on{% endif %}"
+          id="email-toggle"
+          type="button"
+          aria-pressed="{% if user.daily_email_enabled %}true{% else %}false{% endif %}"
+          {% if not user.email_verified_at %}disabled{% endif %}
+        ></button>
+      </div>
+      <div class="settings-meta" id="email-message">
+        {% if not user.email_verified_at %}
+        请先验证邮箱，验证通过后才能开启每日报告邮件。
+        {% endif %}
+      </div>
+    </article>
+
+    <article class="settings-item">
+      <div class="settings-item-head">
+        <div>
+          <div class="settings-item-title">应用推送</div>
+          <div class="settings-item-copy">依赖浏览器与设备支持，部分环境可能不可用。</div>
+        </div>
+        <button class="toggle" id="push-toggle" type="button" aria-pressed="false"></button>
+      </div>
+      <div class="settings-meta" id="push-message">正在读取当前设备状态...</div>
+    </article>
+  </section>
+
+  <section class="settings-section">
+    <p class="settings-header">外观</p>
+    <article class="settings-item">
+      <div class="settings-item-title">主题</div>
+      <div class="choice-group">
+        <button class="choice-chip" type="button" data-theme-choice-button="system">跟随系统</button>
+        <button class="choice-chip" type="button" data-theme-choice-button="light">浅色</button>
+        <button class="choice-chip" type="button" data-theme-choice-button="dark">深色</button>
+      </div>
+      <div class="settings-meta" id="theme-message"></div>
+    </article>
+  </section>
+
+  <section class="settings-section">
+    <p class="settings-header">模型</p>
+    <article class="settings-item">
+      <div class="settings-item-title">当前默认模型</div>
+      <div class="settings-item-copy">{{ user.preferred_model }} · 当前阶段只读展示，后续再开放切换。</div>
+      <div class="list">
+        {% for model in models %}
+        <div class="stock-card">
+          <div style="font-size:16px;font-weight:700;">{{ model.display_name }}</div>
+          <div class="muted" style="margin-top:6px;">{{ model.model_id }} · {{ model.points_per_call }} 点/次</div>
+        </div>
+        {% endfor %}
+      </div>
+    </article>
+  </section>
+
+  <section class="settings-section">
+    <p class="settings-header">安全</p>
+    <article class="settings-item">
+      <div class="settings-item-head password-row">
+        <div>
+          <div class="settings-item-title">修改密码</div>
+          <div class="settings-item-copy">这类需要输入内容的操作仍然使用单独提交。</div>
+        </div>
+        <button class="secondary" id="toggle-password-form" type="button">修改密码</button>
+      </div>
+      <form class="stack password-form" id="change-password-form" hidden>
         <div class="field">
           <label for="current_password">当前密码</label>
           <input id="current_password" name="current_password" type="password" autocomplete="current-password" minlength="8" required>
@@ -38,52 +244,99 @@
           <input id="new_password_confirm" name="new_password_confirm" type="password" autocomplete="new-password" minlength="8" required>
         </div>
         <div class="message" id="password-message"></div>
-        <button type="submit">更新密码</button>
-      </form>
-    </div>
-    <div class="card">
-      <p class="section-title">邮件通知</p>
-      <form class="stack" id="email-preferences-form">
-        <label class="row" style="justify-content:space-between;align-items:center;">
-          <span>
-            <span style="display:block;font-weight:700;">每日报告邮件</span>
-            <span class="muted" style="display:block;margin-top:6px;">使用注册邮箱接收已订阅股票的日报邮件。发送时间与推送时间保持一致。</span>
-          </span>
-          <input
-            id="daily_email_enabled"
-            name="daily_email_enabled"
-            type="checkbox"
-            {% if user.daily_email_enabled %}checked{% endif %}
-            {% if not user.email_verified_at %}disabled{% endif %}
-          >
-        </label>
-        {% if not user.email_verified_at %}
-        <div class="muted">请先验证邮箱，验证通过后才能开启每日报告邮件。</div>
-        {% endif %}
-        <div class="message" id="email-message"></div>
-        <button type="submit" {% if not user.email_verified_at %}disabled{% endif %}>保存邮件设置</button>
-      </form>
-    </div>
-    <div>
-      <div class="muted">模型配置</div>
-      <div class="list" style="margin-top:12px;">
-        {% for model in models %}
-        <div class="stock-card">
-          <div style="font-size:16px;font-weight:700;">{{ model.display_name }}</div>
-          <div class="muted" style="margin-top:6px;">{{ model.model_id }} · {{ model.points_per_call }} 点/次</div>
+        <div class="row" style="justify-content:flex-end;">
+          <button class="secondary" id="cancel-password-form" type="button">取消</button>
+          <button type="submit">更新密码</button>
         </div>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-</section>
+      </form>
+    </article>
+  </section>
+
+  <section class="settings-section">
+    <article class="settings-item">
+      <button type="button" class="secondary" id="logout-button">退出登录</button>
+    </article>
+  </section>
+</div>
+
 <script>
+  const userVerified = {% if user.email_verified_at %}true{% else %}false{% endif %};
   const resendVerificationButton = document.getElementById("resend-verification-button");
   const verificationMessage = document.getElementById("verification-message");
+  const emailToggle = document.getElementById("email-toggle");
+  const emailMessage = document.getElementById("email-message");
+  const pushToggle = document.getElementById("push-toggle");
+  const pushMessage = document.getElementById("push-message");
+  const passwordToggleButton = document.getElementById("toggle-password-form");
+  const cancelPasswordFormButton = document.getElementById("cancel-password-form");
   const changePasswordForm = document.getElementById("change-password-form");
   const passwordMessage = document.getElementById("password-message");
-  const emailPreferencesForm = document.getElementById("email-preferences-form");
-  const emailMessage = document.getElementById("email-message");
+  const logoutButton = document.getElementById("logout-button");
+  const themeMessage = document.getElementById("theme-message");
+
+  function setToggleState(button, on) {
+    button.classList.toggle("is-on", on);
+    button.setAttribute("aria-pressed", on ? "true" : "false");
+  }
+
+  function updateThemeChoiceButtons() {
+    const current = document.documentElement.getAttribute("data-theme-choice") || "system";
+    document.querySelectorAll("[data-theme-choice-button]").forEach((button) => {
+      button.classList.toggle("active", button.dataset.themeChoiceButton === current);
+    });
+    themeMessage.textContent = current === "system" ? "当前跟随系统主题。" : `当前使用${current === "light" ? "浅色" : "深色"}主题。`;
+  }
+
+  async function refreshPushState() {
+    if (!window.DingPanPush || !pushToggle) {
+      return;
+    }
+    if (!userVerified) {
+      pushToggle.disabled = true;
+      setToggleState(pushToggle, false);
+      pushMessage.textContent = "请先验证邮箱，再开启当前设备的推送通知。";
+      return;
+    }
+    pushToggle.disabled = true;
+    pushMessage.textContent = "正在读取当前设备状态...";
+    try {
+      const diagnostics = await window.DingPanPush.getPushDiagnostics();
+      const serverStatus = diagnostics.server_status;
+      const configured = Boolean(serverStatus && serverStatus.configured);
+      const localEnabled = Boolean(diagnostics.local_subscription);
+      const isSupported = diagnostics.service_worker_supported && diagnostics.push_manager_supported && diagnostics.secure_context;
+      const isUnavailable = !configured || !isSupported || (diagnostics.ios && !diagnostics.standalone);
+
+      if (isUnavailable) {
+        setToggleState(pushToggle, false);
+        pushToggle.disabled = true;
+        if (!configured) {
+          pushMessage.textContent = "当前环境未配置推送服务。";
+        } else if (diagnostics.ios && !diagnostics.standalone) {
+          pushMessage.textContent = "iPhone 需先“添加到主屏幕”，再从桌面图标打开应用。";
+        } else if (!diagnostics.secure_context) {
+          pushMessage.textContent = "当前页面不是安全上下文，无法启用推送。";
+        } else {
+          pushMessage.textContent = "当前浏览器或设备不支持推送通知。";
+        }
+        return;
+      }
+
+      setToggleState(pushToggle, localEnabled);
+      pushToggle.disabled = false;
+      if (localEnabled) {
+        pushMessage.textContent = "当前设备已订阅推送。";
+      } else if (serverStatus && serverStatus.enabled) {
+        pushMessage.textContent = "当前账号在其他设备上已开启推送，这台设备尚未订阅。";
+      } else {
+        pushMessage.textContent = "点击开启后，浏览器会请求通知权限。";
+      }
+    } catch (error) {
+      pushToggle.disabled = true;
+      setToggleState(pushToggle, false);
+      pushMessage.textContent = error.message || "读取推送状态失败";
+    }
+  }
 
   if (resendVerificationButton) {
     resendVerificationButton.addEventListener("click", async () => {
@@ -99,49 +352,125 @@
     });
   }
 
-  changePasswordForm.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (changePasswordForm.new_password.value !== changePasswordForm.new_password_confirm.value) {
-      passwordMessage.textContent = "两次输入的新密码不一致";
-      return;
-    }
-    passwordMessage.textContent = "正在更新密码...";
-    const response = await fetch("/api/auth/change-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        current_password: changePasswordForm.current_password.value,
-        new_password: changePasswordForm.new_password.value
-      })
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      passwordMessage.textContent = data.detail || "更新失败";
-      return;
-    }
-    passwordMessage.textContent = data.message || "密码已更新";
-    changePasswordForm.reset();
-  });
-
-  if (emailPreferencesForm) {
-    emailPreferencesForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      emailMessage.textContent = "正在保存邮件设置...";
+  if (emailToggle) {
+    emailToggle.addEventListener("click", async () => {
+      const previous = emailToggle.classList.contains("is-on");
+      const next = !previous;
+      emailToggle.disabled = true;
+      setToggleState(emailToggle, next);
+      emailMessage.textContent = "正在保存...";
       const response = await fetch("/api/email/preferences", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ daily_email_enabled: next })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setToggleState(emailToggle, previous);
+        emailMessage.textContent = data.detail || "保存失败";
+        emailToggle.disabled = false;
+        return;
+      }
+      const confirmed = Boolean(data.daily_email_enabled);
+      setToggleState(emailToggle, confirmed);
+      emailMessage.textContent = data.message || "邮件设置已更新";
+      emailToggle.disabled = false;
+    });
+  }
+
+  if (pushToggle) {
+    pushToggle.addEventListener("click", async () => {
+      if (pushToggle.disabled) {
+        return;
+      }
+      const previous = pushToggle.classList.contains("is-on");
+      pushToggle.disabled = true;
+      pushMessage.textContent = previous ? "正在关闭推送..." : "正在申请通知权限并开启推送...";
+      try {
+        if (previous) {
+          await window.DingPanPush.unsubscribePush();
+        } else {
+          await window.DingPanPush.subscribePush();
+        }
+      } catch (error) {
+        pushMessage.textContent = error.message || "推送操作失败";
+        await refreshPushState();
+        return;
+      }
+      await refreshPushState();
+    });
+  }
+
+  document.querySelectorAll("[data-theme-choice-button]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const choice = button.dataset.themeChoiceButton || "system";
+      try {
+        window.localStorage.setItem("dingpan-theme", choice);
+      } catch (error) {
+        // Ignore private-mode storage failures.
+      }
+      if (typeof window.applyThemeChoice === "function") {
+        window.applyThemeChoice(choice);
+      } else {
+        document.documentElement.setAttribute("data-theme-choice", choice);
+      }
+      updateThemeChoiceButtons();
+    });
+  });
+
+  if (passwordToggleButton && changePasswordForm) {
+    passwordToggleButton.addEventListener("click", () => {
+      changePasswordForm.hidden = false;
+      passwordToggleButton.hidden = true;
+    });
+  }
+
+  if (cancelPasswordFormButton && changePasswordForm) {
+    cancelPasswordFormButton.addEventListener("click", () => {
+      changePasswordForm.hidden = true;
+      passwordToggleButton.hidden = false;
+      passwordMessage.textContent = "";
+      changePasswordForm.reset();
+    });
+  }
+
+  if (changePasswordForm) {
+    changePasswordForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (changePasswordForm.new_password.value !== changePasswordForm.new_password_confirm.value) {
+        passwordMessage.textContent = "两次输入的新密码不一致";
+        return;
+      }
+      passwordMessage.textContent = "正在更新密码...";
+      const response = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          daily_email_enabled: emailPreferencesForm.daily_email_enabled.checked
+          current_password: changePasswordForm.current_password.value,
+          new_password: changePasswordForm.new_password.value
         })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        emailMessage.textContent = data.detail || "保存失败";
+        passwordMessage.textContent = data.detail || "更新失败";
         return;
       }
-      emailPreferencesForm.daily_email_enabled.checked = Boolean(data.daily_email_enabled);
-      emailMessage.textContent = data.message || "邮件设置已更新";
+      passwordMessage.textContent = data.message || "密码已更新";
+      changePasswordForm.reset();
     });
   }
+
+  if (logoutButton) {
+    logoutButton.addEventListener("click", async () => {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      window.location.href = "/";
+    });
+  }
+
+  updateThemeChoiceButtons();
+  refreshPushState();
 </script>
 {% endblock %}

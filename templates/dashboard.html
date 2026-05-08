@@ -8,423 +8,440 @@
     {% set current_model = model %}
   {% endif %}
 {% endfor %}
+{% macro subscription_form(form_id, compact=False) %}
+<form class="subscription-form stack" id="{{ form_id }}">
+  <div class="field">
+    <label for="{{ form_id }}-stock_code">股票代码</label>
+    <input id="{{ form_id }}-stock_code" name="stock_code" placeholder="例如 603212" required {% if not is_verified %}disabled{% endif %}>
+  </div>
+  <div class="field">
+    <label for="{{ form_id }}-cost_price">持仓成本</label>
+    <input id="{{ form_id }}-cost_price" name="cost_price" type="number" step="0.01" min="0" value="0" {% if not is_verified %}disabled{% endif %}>
+  </div>
+  {% if compact %}
+  <details class="more-options">
+    <summary>更多选项</summary>
+    <div class="stack" style="margin-top:12px;">
+      <div class="field">
+        <label for="{{ form_id }}-stock_name">股票名称</label>
+        <input id="{{ form_id }}-stock_name" name="stock_name" placeholder="可留空，后续自动解析" {% if not is_verified %}disabled{% endif %}>
+      </div>
+      <div class="field">
+        <label for="{{ form_id }}-model_id">分析模型</label>
+        <select id="{{ form_id }}-model_id" name="model_id" {% if not is_verified %}disabled{% endif %}>
+          {% for model in models %}
+          <option value="{{ model.model_id }}" {% if current_model and current_model.model_id == model.model_id %}selected{% endif %}>
+            {{ model.display_name }} · {{ model.points_per_call }}点/次
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </details>
+  {% else %}
+  <div class="field">
+    <label for="{{ form_id }}-stock_name">股票名称</label>
+    <input id="{{ form_id }}-stock_name" name="stock_name" placeholder="可留空，后续自动解析" {% if not is_verified %}disabled{% endif %}>
+  </div>
+  <div class="field">
+    <label for="{{ form_id }}-model_id">分析模型</label>
+    <select id="{{ form_id }}-model_id" name="model_id" {% if not is_verified %}disabled{% endif %}>
+      {% for model in models %}
+      <option value="{{ model.model_id }}" {% if current_model and current_model.model_id == model.model_id %}selected{% endif %}>
+        {{ model.display_name }} · {{ model.points_per_call }}点/次
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div class="message" data-form-message></div>
+  <button type="submit" {% if not is_verified %}disabled{% endif %}>添加订阅</button>
+</form>
+{% endmacro %}
 <style>
-  .custom-select {
-    position: relative;
+  .watch-shell {
+    max-width: 1080px;
+    margin: 0 auto;
   }
-  .custom-select-trigger {
-    width: 100%;
+  .watch-layout {
+    display: grid;
+    gap: 20px;
+    align-items: start;
+  }
+  .page-header {
     display: flex;
+    justify-content: space-between;
     align-items: center;
+    gap: 16px;
+    margin-bottom: 18px;
+  }
+  .page-title {
+    margin: 0;
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+  .page-subtitle {
+    margin: 6px 0 0;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+  .watch-main {
+    display: grid;
+    gap: 16px;
+  }
+  .watch-sidebar {
+    display: grid;
+    gap: 16px;
+  }
+  .sidebar-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    padding: 18px;
+    box-shadow: var(--shadow-soft);
+  }
+  .stock-grid {
+    display: grid;
+    gap: 16px;
+  }
+  .stock-summary {
+    display: grid;
+    gap: 14px;
+  }
+  .stock-headline {
+    display: flex;
     justify-content: space-between;
     gap: 12px;
-    background: #0d1326;
-    color: white;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 13px 14px;
+    align-items: flex-start;
+  }
+  .stock-title {
+    font-size: 20px;
+    font-weight: 800;
+  }
+  .metric-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .trend-up {
+    color: var(--color-up);
+  }
+  .trend-down {
+    color: var(--color-down);
+  }
+  .trend-flat {
+    color: var(--text-muted);
+  }
+  .watch-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .schedule-copy {
+    color: var(--text-secondary);
+    line-height: 1.8;
     font-size: 14px;
+  }
+  .empty-panel {
+    display: grid;
+    gap: 18px;
+    padding: 28px 22px;
+  }
+  .empty-panel h2 {
+    margin: 0;
+    font-size: 26px;
+  }
+  .empty-panel p {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.8;
+  }
+  .more-options {
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 12px 14px;
+    background: var(--bg-elevated);
+  }
+  .more-options summary {
+    cursor: pointer;
+    color: var(--text-secondary);
     font-weight: 700;
   }
-  .custom-select-trigger::after {
-    content: "⌄";
-    color: var(--text-muted);
-    font-size: 14px;
+  .sheet-panel,
+  .modal-panel {
+    width: min(100%, 520px);
+    margin: auto;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    padding: 20px;
+    box-shadow: var(--shadow-soft);
   }
-  .custom-select-menu {
+  .sheet-panel {
     position: absolute;
-    left: 0;
-    right: 0;
-    top: calc(100% + 8px);
-    z-index: 25;
-    display: grid;
-    gap: 8px;
-    padding: 10px;
-    background: rgba(18, 21, 40, 0.98);
-    border: 1px solid rgba(93, 173, 226, 0.18);
-    border-radius: 16px;
-    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.24);
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    max-width: 520px;
   }
-  .custom-select-menu[hidden] {
+  .modal-panel {
+    position: relative;
+    top: 10vh;
+  }
+  .dialog-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: start;
+    margin-bottom: 16px;
+  }
+  .dialog-header h3 {
+    margin: 0;
+    font-size: 20px;
+  }
+  .dialog-header p {
+    margin: 6px 0 0;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+  .dialog-close {
+    min-width: 40px;
+    padding: 10px 12px;
+  }
+  .modal-backdrop[data-dialog-mode="desktop"] {
     display: none;
   }
-  .custom-select-option {
-    width: 100%;
-    text-align: left;
-    background: rgba(13, 19, 38, 0.72);
-    border: 1px solid transparent;
-    border-radius: 12px;
-    padding: 12px 13px;
-  }
-  .custom-select-option.active {
-    border-color: rgba(93, 173, 226, 0.32);
-    background: linear-gradient(135deg, rgba(15, 52, 96, 0.52), rgba(13, 19, 38, 0.92));
-  }
-  .schedule-board {
-    display: grid;
-    gap: 10px;
+  .inline-note {
     margin-top: 14px;
-    padding: 14px;
-    border: 1px solid rgba(93, 173, 226, 0.14);
-    border-radius: 16px;
-    background: rgba(13, 19, 38, 0.52);
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.7;
   }
-  .schedule-board .row {
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
+  .verification-banner {
+    margin-bottom: 16px;
+    border-color: rgba(232, 146, 11, 0.35);
   }
-  .schedule-time {
-    font-size: 18px;
-    font-weight: 800;
-    letter-spacing: 0.04em;
+  .mobile-schedule {
+    display: none;
+    margin-top: 16px;
+    color: var(--text-muted);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  @media (min-width: 900px) {
+    .watch-layout {
+      grid-template-columns: minmax(0, 1fr) 320px;
+    }
+  }
+  @media (max-width: 899px) {
+    .page-header {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+    .watch-sidebar {
+      display: none;
+    }
+    .mobile-schedule {
+      display: block;
+    }
+    .modal-backdrop[data-dialog-mode="desktop"] {
+      display: none !important;
+    }
+  }
+  @media (min-width: 900px) {
+    .modal-backdrop[data-dialog-mode="mobile"] {
+      display: none !important;
+    }
   }
 </style>
-{% if not is_verified %}
-<section class="card" style="margin-bottom:16px;border-color:#ffa502;">
-  <div class="row" style="justify-content:space-between;align-items:center;">
-    <div>
-      <p class="section-title" style="margin-bottom:6px;">邮箱尚未验证</p>
-      <p class="muted" style="margin:0;line-height:1.8;">请先完成邮箱验证。验证前您仍可登录，但无法添加订阅、查看报告或开启推送。</p>
-    </div>
-    <button type="button" class="secondary" id="resend-verification-button">重新发送验证邮件</button>
-  </div>
-  <div class="message" id="verification-message" style="margin-top:12px;"></div>
-</section>
-{% endif %}
-<div class="grid two">
-  <section class="card">
-    <p class="section-title">账户概览</p>
-    <div class="stack">
-      <div>
-        <div class="muted">登录邮箱</div>
-        <div style="font-size:18px;font-weight:700;">{{ user.email }}</div>
-      </div>
-      <div class="row">
-        <div class="card" style="padding:14px;flex:1;">
-          <div class="muted">默认模型</div>
-          <div style="font-weight:700;">{{ user.preferred_model }}</div>
-        </div>
-        <div class="card" style="padding:14px;flex:1;">
-          <div class="muted">点数余额</div>
-          <div style="font-weight:700;">{{ user.points_balance }}</div>
-        </div>
-      </div>
-      <div class="card" style="padding:14px;">
-        <div class="row" style="justify-content:space-between;align-items:center;">
-          <div>
-            <div class="muted">日报推送</div>
-            <div style="font-weight:700;">{% if push_enabled %}已开启{% else %}未开启{% endif %}</div>
-            <div class="muted" style="margin-top:6px;">
-              {% if push_configured %}
-              当前环境已配置 VAPID，可进行浏览器推送订阅。
-              {% else %}
-              当前环境未配置 VAPID，开启推送按钮会被禁用。
-              {% endif %}
-            </div>
-          </div>
-          <button
-            type="button"
-            id="push-toggle"
-            class="secondary"
-            onclick="window.handlePushToggle && window.handlePushToggle()"
-            {% if (not push_configured) or (not is_verified) %}disabled title="请先验证邮箱，并确认环境已配置 VAPID"{% endif %}
-          >
-            {% if push_enabled %}关闭推送{% else %}开启推送{% endif %}
-          </button>
-        </div>
-        <p class="muted" id="push-message" style="margin:12px 0 0;">
-          {% if push_configured %}
-          Web Push 已接入。浏览器会请求通知权限，并把当前设备写入您的订阅列表。
-          {% else %}
-          当前环境未配置 VAPID 公私钥，推送功能暂不可用。
-          {% endif %}
-        </p>
-        <div class="card" style="padding:14px;margin-top:14px;">
-          <div class="muted">系统调度时间</div>
-          <div class="schedule-board">
-            <div class="row">
-              <span class="muted">报告生成</span>
-              <span class="schedule-time">{{ report_generate_time }}</span>
-            </div>
-            <div class="row">
-              <span class="muted">报告邮件</span>
-              <span class="schedule-time">{{ report_email_time }}</span>
-            </div>
-            <div class="row">
-              <span class="muted">应用推送</span>
-              <span class="schedule-time">{{ report_push_time }}</span>
-            </div>
-            <div class="row">
-              <span class="muted">系统时区</span>
-              <span>{{ report_schedule_timezone }}</span>
-            </div>
-          </div>
-          <p class="muted" style="margin:12px 0 0;line-height:1.8;">系统会先生成当日报告，再发送邮件，最后发送应用通知。手动测试推送不受上面的时间限制。</p>
-        </div>
-        <div class="card" style="padding:14px;margin-top:14px;">
-          <div class="row" style="justify-content:space-between;align-items:center;">
-            <div>
-              <div class="muted">通知诊断</div>
-              <div style="font-weight:700;">用于判断当前设备是否真的处于可接收推送的安装态</div>
-            </div>
-            <button type="button" class="secondary" id="push-diagnostics-refresh">刷新状态</button>
-          </div>
-          <div class="list" style="margin-top:12px;">
-            <div class="row" style="justify-content:space-between;">
-              <span class="muted">应用安装态</span>
-              <span id="diag-standalone">-</span>
-            </div>
-            <div class="row" style="justify-content:space-between;">
-              <span class="muted">通知权限</span>
-              <span id="diag-permission">-</span>
-            </div>
-            <div class="row" style="justify-content:space-between;">
-              <span class="muted">本机订阅</span>
-              <span id="diag-local-subscription">-</span>
-            </div>
-            <div class="row" style="justify-content:space-between;">
-              <span class="muted">服务器记录数</span>
-              <span id="diag-server-count">-</span>
-            </div>
-          </div>
-          <p class="muted" id="push-diagnostics-message" style="margin:12px 0 0;line-height:1.8;">
-            iPhone 必须先“添加到主屏幕”，再从桌面图标打开并单独开启推送。
-          </p>
-        </div>
-        <div class="row" style="margin-top:14px;">
-          <button
-            type="button"
-            id="push-test"
-            class="secondary"
-            onclick="window.handlePushTest && window.handlePushTest()"
-            {% if (not push_configured) or (not is_verified) %}disabled title="请先验证邮箱、完成 VAPID 配置并开启推送"{% endif %}
-          >
-            发送测试推送
-          </button>
-        </div>
-      </div>
-    </div>
-  </section>
 
-  <section class="card">
-    <p class="section-title">添加自选股</p>
-    <form class="stack" id="subscription-form">
-      <div class="field">
-        <label for="stock_code">股票代码</label>
-        <input id="stock_code" name="stock_code" placeholder="例如 603212" required {% if not is_verified %}disabled{% endif %}>
+<div class="watch-shell">
+  {% if not is_verified %}
+  <section class="card verification-banner">
+    <div class="row" style="justify-content:space-between;align-items:center;">
+      <div>
+        <p class="section-title" style="margin-bottom:6px;">邮箱尚未验证</p>
+        <p class="muted" style="margin:0;line-height:1.8;">请先完成邮箱验证。验证前您仍可登录，但无法添加订阅、查看报告或开启推送。</p>
       </div>
-      <div class="field">
-        <label for="stock_name">股票名称</label>
-        <input id="stock_name" name="stock_name" placeholder="暂时可留空，后续会自动解析" {% if not is_verified %}disabled{% endif %}>
-      </div>
-      <div class="field">
-        <label for="cost_price">持仓成本</label>
-        <input id="cost_price" name="cost_price" type="number" step="0.01" min="0" value="0" {% if not is_verified %}disabled{% endif %}>
-      </div>
-      <div class="field">
-        <label for="model_id">分析模型</label>
-        <div class="custom-select" id="model-select" data-disabled="{% if not is_verified %}1{% else %}0{% endif %}">
-          <input id="model_id" name="model_id" type="hidden" value="{{ current_model.model_id if current_model else 'gemini' }}">
-          <button class="custom-select-trigger" id="model-select-trigger" type="button" {% if not is_verified %}disabled{% endif %}>
-            <span id="model-select-label">
-              {% if current_model %}
-              {{ current_model.display_name }} · {{ current_model.points_per_call }}点/次
-              {% else %}
-              请选择模型
-              {% endif %}
-            </span>
-          </button>
-          <div class="custom-select-menu" id="model-select-menu" hidden>
-            {% for model in models %}
-            <button
-              class="custom-select-option {% if current_model and current_model.model_id == model.model_id %}active{% endif %}"
-              type="button"
-              data-model-id="{{ model.model_id }}"
-              data-model-label="{{ model.display_name }} · {{ model.points_per_call }}点/次"
-            >
-              <div style="font-weight:800;">{{ model.display_name }}</div>
-              <div class="muted" style="margin-top:5px;font-size:12px;">{{ model.model_id }} · {{ model.points_per_call }}点/次</div>
-            </button>
-            {% endfor %}
-          </div>
+      <button type="button" class="secondary" id="resend-verification-button">重新发送验证邮件</button>
+    </div>
+    <div class="message" id="verification-message" style="margin-top:12px;"></div>
+  </section>
+  {% endif %}
+
+  {% if subscriptions %}
+  <div class="watch-layout">
+    <section class="watch-main">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">自选股</h1>
+          <p class="page-subtitle">每天只看最重要的结论，点进单只股票再看完整报告。</p>
+        </div>
+        <div class="watch-actions">
+          <button class="button" type="button" id="open-add-stock" {% if not is_verified %}disabled{% endif %}>+ 添加股票</button>
         </div>
       </div>
-      <div class="message" id="subscription-message"></div>
-      <button type="submit" {% if not is_verified %}disabled{% endif %}>添加订阅</button>
-    </form>
+
+      <div class="stock-grid" id="subscription-list">
+        {% for item in subscriptions %}
+        <article class="stock-card" data-id="{{ item.id }}">
+          <div class="stock-summary">
+            <div class="stock-headline">
+              <div>
+                <div class="stock-title">{{ item.stock_name or item.stock_code }}</div>
+                <div class="muted" style="margin-top:4px;">{{ item.stock_code }} · {{ item.model_id }}</div>
+              </div>
+              <button class="secondary delete-button" data-id="{{ item.id }}" type="button" {% if not is_verified %}disabled{% endif %}>删除</button>
+            </div>
+            {% if item.latest_close_price is not none %}
+            <div class="metric-row">
+              <span class="pill">¥{{ '%.2f'|format(item.latest_close_price) }}</span>
+              <span class="pill {% if item.latest_change_pct > 0 %}trend-up{% elif item.latest_change_pct < 0 %}trend-down{% else %}trend-flat{% endif %}">
+                {{ '%+.2f'|format(item.latest_change_pct) }}%
+              </span>
+              {% if item.latest_pnl_pct is not none %}
+              <span class="pill">浮盈 {{ '%+.2f'|format(item.latest_pnl_pct) }}%</span>
+              {% endif %}
+              <span class="pill">成本 ¥{{ '%.2f'|format(item.cost_price) }}</span>
+            </div>
+            <p class="muted" style="margin:0;line-height:1.8;">{{ item.latest_summary }}</p>
+            <div class="row" style="justify-content:space-between;align-items:center;">
+              <div class="muted">最新报告：{{ item.latest_trade_date }}</div>
+              {% if is_verified %}
+              <a class="button secondary" href="/report/{{ item.stock_code }}/latest">查看报告</a>
+              {% else %}
+              <span class="button secondary disabled">验证后查看报告</span>
+              {% endif %}
+            </div>
+            {% else %}
+            <p class="muted" style="margin:0;line-height:1.8;">暂无共享分析缓存，系统生成后这里会显示最新摘要。</p>
+            <div class="row" style="justify-content:flex-end;">
+              <span class="pill">成本 ¥{{ '%.2f'|format(item.cost_price) }}</span>
+            </div>
+            {% endif %}
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+      <p class="mobile-schedule">每日 {{ report_generate_time }} 生成报告 · {{ report_email_time }} 邮件送达{% if report_push_time %} · {{ report_push_time }} 推送{% endif %}</p>
+    </section>
+
+    <aside class="watch-sidebar">
+      <section class="sidebar-card">
+        <div class="muted">已订阅</div>
+        <div style="font-size:30px;font-weight:800;margin-top:8px;">{{ subscriptions|length }} 只</div>
+      </section>
+      <section class="sidebar-card">
+        <button class="button" type="button" id="open-add-stock-desktop" style="width:100%;" {% if not is_verified %}disabled{% endif %}>+ 添加股票</button>
+      </section>
+      <section class="sidebar-card">
+        <div class="muted">每日更新时间</div>
+        <p class="schedule-copy" style="margin:10px 0 0;">{{ report_generate_time }} 生成报告，{{ report_email_time }} 发送邮件{% if report_push_time %}，支持的设备会额外收到推送提醒{% endif %}。</p>
+        <p class="inline-note">时区：{{ report_schedule_timezone }}</p>
+      </section>
+    </aside>
+  </div>
+  {% else %}
+  <section class="card empty-panel">
+    <div>
+      <h2>还没有自选股</h2>
+      <p style="margin-top:10px;">先添加第一只股票，开始接收每日分析与报告。</p>
+    </div>
+    {{ subscription_form("empty-subscription-form", True) }}
   </section>
+  {% endif %}
 </div>
 
-<section class="card" style="margin-top:16px;">
-  <div class="row" style="justify-content:space-between;align-items:center;">
-    <p class="section-title" style="margin:0;">我的自选股</p>
-    <span class="pill">{{ subscriptions|length }} 项</span>
-  </div>
-  <div class="list" id="subscription-list" style="margin-top:14px;">
-    {% if subscriptions %}
-      {% for item in subscriptions %}
-      <article class="stock-card" data-id="{{ item.id }}">
-        <div class="row" style="justify-content:space-between;align-items:flex-start;">
-          <div>
-            <div style="font-size:18px;font-weight:800;">{{ item.stock_name or item.stock_code }}</div>
-            <div class="muted" style="margin-top:4px;">{{ item.stock_code }} · {{ item.model_id }}</div>
-          </div>
-          <button class="secondary delete-button" data-id="{{ item.id }}" type="button" {% if not is_verified %}disabled{% endif %}>删除</button>
-        </div>
-        {% if item.latest_close_price is not none %}
-        <div class="row" style="margin-top:14px;">
-          <span class="pill">¥{{ '%.2f'|format(item.latest_close_price) }}</span>
-          <span class="pill" style="color:{% if item.latest_change_pct > 0 %}#ff4757{% elif item.latest_change_pct < 0 %}#2ed573{% else %}#8ea3bf{% endif %};">
-            {{ '%+.2f'|format(item.latest_change_pct) }}%
-          </span>
-          {% if item.latest_pnl_pct is not none %}
-          <span class="pill">浮盈 {{ '%+.2f'|format(item.latest_pnl_pct) }}%</span>
-          {% endif %}
-        </div>
-        <p class="muted" style="margin:12px 0 0;line-height:1.75;">{{ item.latest_summary }}</p>
-        <div class="muted" style="margin-top:8px;">最新报告：{{ item.latest_trade_date }}</div>
-        {% else %}
-        <p class="muted" style="margin:12px 0 0;line-height:1.75;">暂无共享分析缓存，运行批量生成后这里会显示最新摘要。</p>
-        {% endif %}
-        <div class="row" style="margin-top:14px;">
-          <span class="pill">成本 ¥{{ '%.2f'|format(item.cost_price) }}</span>
-          {% if is_verified %}
-          <a class="button secondary" href="/report/{{ item.stock_code }}/latest">查看报告</a>
-          {% else %}
-          <span class="button secondary disabled">验证后查看报告</span>
-          {% endif %}
-        </div>
-      </article>
-      {% endfor %}
-    {% else %}
-      <div class="stock-card">
-        <div style="font-size:18px;font-weight:700;">还没有自选股</div>
-        <p class="muted" style="margin:10px 0 0;">先添加一只股票，下一阶段会把每日共享分析和报告页接进来。</p>
+{% if subscriptions %}
+<div class="modal-backdrop" id="add-stock-sheet" data-dialog-mode="mobile" hidden>
+  <div class="sheet-panel">
+    <div class="dialog-header">
+      <div>
+        <h3>添加股票</h3>
+        <p>输入股票代码与成本价，更多选项按需展开。</p>
       </div>
-    {% endif %}
+      <button class="secondary dialog-close" type="button" data-close-add-dialog>关闭</button>
+    </div>
+    {{ subscription_form("mobile-subscription-form", True) }}
   </div>
-</section>
+</div>
+
+<div class="modal-backdrop" id="add-stock-modal" data-dialog-mode="desktop" hidden>
+  <div class="modal-panel">
+    <div class="dialog-header">
+      <div>
+        <h3>添加股票</h3>
+        <p>这份表单与移动端共享字段逻辑，只是展示容器不同。</p>
+      </div>
+      <button class="secondary dialog-close" type="button" data-close-add-dialog>关闭</button>
+    </div>
+    {{ subscription_form("desktop-subscription-form") }}
+  </div>
+</div>
+{% endif %}
 
 <script>
-  const form = document.getElementById("subscription-form");
-  const message = document.getElementById("subscription-message");
-  const pushToggle = document.getElementById("push-toggle");
-  const pushMessage = document.getElementById("push-message");
-  const pushTestButton = document.getElementById("push-test");
-  const pushStatusLabel = pushToggle ? pushToggle.parentElement.querySelector("div div:last-child") : null;
   const resendVerificationButton = document.getElementById("resend-verification-button");
   const verificationMessage = document.getElementById("verification-message");
-  const pushDiagnosticsRefresh = document.getElementById("push-diagnostics-refresh");
-  const diagStandalone = document.getElementById("diag-standalone");
-  const diagPermission = document.getElementById("diag-permission");
-  const diagLocalSubscription = document.getElementById("diag-local-subscription");
-  const diagServerCount = document.getElementById("diag-server-count");
-  const pushDiagnosticsMessage = document.getElementById("push-diagnostics-message");
-  const modelSelectTrigger = document.getElementById("model-select-trigger");
-  const modelSelectMenu = document.getElementById("model-select-menu");
-  const modelSelectLabel = document.getElementById("model-select-label");
-  const modelSelectInput = document.getElementById("model_id");
+  const addStockModal = document.getElementById("add-stock-modal");
+  const addStockSheet = document.getElementById("add-stock-sheet");
+  const openAddButtons = [
+    document.getElementById("open-add-stock"),
+    document.getElementById("open-add-stock-desktop")
+  ].filter(Boolean);
 
-  function setDiagText(node, text, color = "") {
-    if (!node) {
-      return;
-    }
-    node.textContent = text;
-    node.style.color = color;
+  function activeDialog() {
+    return window.matchMedia("(min-width: 900px)").matches ? addStockModal : addStockSheet;
   }
 
-  async function refreshPushDiagnostics() {
-    if (!window.DingPanPush || !diagStandalone) {
-      return;
-    }
-    try {
-      const diagnostics = await window.DingPanPush.getPushDiagnostics();
-      const serverStatus = diagnostics.server_status;
-      setDiagText(diagStandalone, diagnostics.standalone ? "已安装打开" : "普通浏览器标签页", diagnostics.standalone ? "#2ed573" : "#ffa502");
-      setDiagText(diagPermission, diagnostics.notification_permission, diagnostics.notification_permission === "granted" ? "#2ed573" : "#ffa502");
-      setDiagText(diagLocalSubscription, diagnostics.local_subscription ? "当前设备已订阅" : "当前设备未订阅", diagnostics.local_subscription ? "#2ed573" : "#ffa502");
-      setDiagText(diagServerCount, serverStatus ? String(serverStatus.count) : "读取失败", serverStatus && serverStatus.count > 0 ? "#2ed573" : "#ffa502");
-
-      if (diagnostics.ios && !diagnostics.standalone) {
-        pushDiagnosticsMessage.textContent = "当前是 iPhone 浏览器页，不是桌面安装态。请先“添加到主屏幕”，再从桌面图标打开。";
-      } else if (diagnostics.notification_permission !== "granted") {
-        pushDiagnosticsMessage.textContent = "通知权限尚未授予。请先允许通知，再开启推送。";
-      } else if (!diagnostics.local_subscription) {
-        pushDiagnosticsMessage.textContent = "当前设备还没有生成本机订阅。请点击“开启推送”。";
-      } else {
-        pushDiagnosticsMessage.textContent = "当前设备已经具备基本推送条件。若仍未看到横幅，请检查系统通知设置或通知中心。";
+  function setDialogOpen(open) {
+    [addStockModal, addStockSheet].forEach((dialog) => {
+      if (dialog) {
+        dialog.hidden = true;
       }
-    } catch (error) {
-      console.error("Failed to refresh push diagnostics:", error);
-      pushDiagnosticsMessage.textContent = error.message || "通知诊断读取失败";
-    }
-  }
-
-  function toggleModelSelect(forceOpen) {
-    if (!modelSelectMenu || !modelSelectTrigger || modelSelectTrigger.disabled) {
-      return;
-    }
-    const nextOpen = typeof forceOpen === "boolean" ? forceOpen : modelSelectMenu.hidden;
-    modelSelectMenu.hidden = !nextOpen;
-  }
-
-  function selectModel(modelId, modelLabel) {
-    if (!modelSelectInput || !modelSelectLabel) {
-      return;
-    }
-    modelSelectInput.value = modelId;
-    modelSelectLabel.textContent = modelLabel;
-    modelSelectMenu?.querySelectorAll(".custom-select-option").forEach((option) => {
-      option.classList.toggle("active", option.dataset.modelId === modelId);
     });
-    toggleModelSelect(false);
+    const dialog = activeDialog();
+    if (dialog) {
+      dialog.hidden = !open;
+    }
   }
 
-  async function refreshPushState() {
-    if (!pushToggle || pushToggle.disabled) {
+  openAddButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setDialogOpen(true);
+    });
+  });
+
+  document.querySelectorAll("[data-close-add-dialog]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setDialogOpen(false);
+    });
+  });
+
+  [addStockModal, addStockSheet].forEach((dialog) => {
+    if (!dialog) {
       return;
     }
-    try {
-      const status = await window.DingPanPush.fetchPushStatus();
-      const subscription = await window.DingPanPush.getExistingSubscription().catch(() => null);
-      const localEnabled = Boolean(subscription);
-      if (pushStatusLabel) {
-        if (localEnabled) {
-          pushStatusLabel.textContent = "当前设备已开启";
-        } else if (status.enabled) {
-          pushStatusLabel.textContent = "其他设备已开启";
-        } else {
-          pushStatusLabel.textContent = "未开启";
-        }
+    dialog.addEventListener("click", (event) => {
+      if (event.target === dialog) {
+        setDialogOpen(false);
       }
-      pushToggle.textContent = localEnabled ? "关闭推送" : "开启推送";
-      if (pushTestButton) {
-        pushTestButton.disabled = !status.configured || !localEnabled;
-        if (pushTestButton.disabled) {
-          pushTestButton.style.opacity = ".45";
-          pushTestButton.style.cursor = "not-allowed";
-        } else {
-          pushTestButton.style.opacity = "";
-          pushTestButton.style.cursor = "";
-        }
-      }
-      if (!localEnabled && status.enabled) {
-        pushMessage.textContent = "当前账号已有其他设备订阅，但这台设备还没有完成本机订阅。请点击“开启推送”。";
-      }
-    } catch (error) {
-      console.error("Failed to refresh push state:", error);
-    }
-  }
+    });
+  });
 
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    message.textContent = "正在添加...";
+  async function submitSubscriptionForm(form) {
+    const message = form.querySelector("[data-form-message]");
+    if (message) {
+      message.textContent = "正在添加...";
+    }
     const payload = {
       stock_code: form.stock_code.value.trim(),
       stock_name: form.stock_name.value.trim(),
       cost_price: Number(form.cost_price.value || 0),
-      model_id: form.model_id.value
+      model_id: form.model_id ? form.model_id.value : "{{ current_model.model_id if current_model else 'gemini' }}"
     };
     const response = await fetch("/api/subscriptions", {
       method: "POST",
@@ -433,10 +450,31 @@
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      message.textContent = data.detail || "添加失败";
+      if (message) {
+        message.textContent = data.detail || "添加失败";
+      }
       return;
     }
     window.location.reload();
+  }
+
+  document.querySelectorAll(".subscription-form").forEach((form) => {
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      await submitSubscriptionForm(form);
+    });
+  });
+
+  document.querySelectorAll(".delete-button").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const response = await fetch(`/api/subscriptions/${button.dataset.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" }
+      });
+      if (response.ok) {
+        window.location.reload();
+      }
+    });
   });
 
   if (resendVerificationButton) {
@@ -452,95 +490,5 @@
       resendVerificationButton.disabled = false;
     });
   }
-
-  if (pushDiagnosticsRefresh) {
-    pushDiagnosticsRefresh.addEventListener("click", async () => {
-      await refreshPushDiagnostics();
-    });
-  }
-
-  if (modelSelectTrigger && modelSelectMenu) {
-    modelSelectTrigger.addEventListener("click", () => {
-      toggleModelSelect();
-    });
-    modelSelectMenu.querySelectorAll(".custom-select-option").forEach((option) => {
-      option.addEventListener("click", () => {
-        selectModel(option.dataset.modelId || "", option.dataset.modelLabel || "");
-      });
-    });
-  }
-
-  document.addEventListener("click", (event) => {
-    if (!modelSelectMenu || !modelSelectTrigger) {
-      return;
-    }
-    if (!modelSelectMenu.contains(event.target) && !modelSelectTrigger.contains(event.target)) {
-      toggleModelSelect(false);
-    }
-  });
-
-  document.querySelectorAll(".delete-button").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const response = await fetch(`/api/subscriptions/${button.dataset.id}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" }
-      });
-      if (response.ok) {
-        window.location.reload();
-      }
-    });
-  });
-
-  window.handlePushToggle = async function handlePushToggle() {
-    if (!pushToggle || pushToggle.disabled) {
-      return;
-    }
-      pushToggle.disabled = true;
-      try {
-        const existing = await window.DingPanPush.getExistingSubscription();
-        if (existing) {
-          pushMessage.textContent = "正在关闭推送...";
-          await window.DingPanPush.unsubscribePush();
-          pushMessage.textContent = "当前设备的推送已关闭。";
-          pushToggle.textContent = "开启推送";
-        } else {
-          pushMessage.textContent = "正在申请通知权限并注册推送...";
-          await window.DingPanPush.subscribePush();
-          pushMessage.textContent = "当前设备的推送已开启。";
-        }
-      } catch (error) {
-        console.error("Push toggle failed:", error);
-        pushMessage.textContent = error.message || "推送操作失败";
-      } finally {
-        pushToggle.disabled = false;
-        await refreshPushState();
-        await refreshPushDiagnostics();
-      }
-  };
-
-  window.handlePushTest = async function handlePushTest() {
-    if (!pushTestButton || pushTestButton.disabled) {
-      return;
-    }
-      pushTestButton.disabled = true;
-      pushMessage.textContent = "正在发送测试推送...";
-      const response = await fetch("/api/push/test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" }
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        pushMessage.textContent = data.detail || "测试推送失败";
-        await refreshPushState();
-        await refreshPushDiagnostics();
-        return;
-      }
-      pushMessage.textContent = `测试推送已发送，送达设备数：${data.delivered}`;
-      await refreshPushState();
-      await refreshPushDiagnostics();
-  };
-
-  refreshPushState();
-  refreshPushDiagnostics();
 </script>
 {% endblock %}

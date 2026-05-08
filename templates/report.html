@@ -1,128 +1,203 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="hero">
-  <div class="row" style="justify-content:space-between;align-items:flex-start;">
+<style>
+  .report-shell {
+    max-width: 760px;
+    margin: 0 auto;
+    display: grid;
+    gap: 16px;
+  }
+  .report-topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-soft);
+  }
+  .report-topbar h1 {
+    margin: 0;
+    font-size: 22px;
+  }
+  .report-price {
+    text-align: right;
+  }
+  .report-price strong {
+    display: block;
+    font-size: 34px;
+    line-height: 1.1;
+  }
+  .trend-up {
+    color: var(--color-up);
+  }
+  .trend-down {
+    color: var(--color-down);
+  }
+  .trend-flat {
+    color: var(--text-muted);
+  }
+  .report-nav {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .report-nav-center {
+    display: flex;
+    gap: 10px;
+  }
+  @media (max-width: 640px) {
+    .report-topbar {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .report-price {
+      text-align: left;
+    }
+    .report-nav {
+      flex-direction: column;
+    }
+    .report-nav-center {
+      width: 100%;
+      justify-content: space-between;
+    }
+  }
+</style>
+
+<div class="report-shell">
+  <div class="report-topbar">
     <div>
-      <div class="pill">{{ model_id }}</div>
-      <h1 style="font-size:34px;margin:16px 0 6px;">{{ market_data.stock_name }} {{ market_data.stock_code }}</h1>
-      <div class="muted">{{ market_data.latest_trade_date }}</div>
+      <a class="button secondary" href="/dashboard">← 返回自选</a>
+      <h1 style="margin-top:14px;">{{ market_data.stock_name }} {{ market_data.stock_code }}</h1>
+      <div class="muted" style="margin-top:6px;">{{ market_data.latest_trade_date }} · {{ model_id }}</div>
     </div>
-    <div style="text-align:right;">
-      <div style="font-size:42px;font-weight:800;">¥{{ '%.2f'|format(market_data.snapshot.close_price) }}</div>
-      <div style="font-size:18px;font-weight:700;color:{% if market_data.snapshot.change_pct > 0 %}#ff4757{% elif market_data.snapshot.change_pct < 0 %}#2ed573{% else %}#8ea3bf{% endif %};">
+    <div class="report-price">
+      <strong>¥{{ '%.2f'|format(market_data.snapshot.close_price) }}</strong>
+      <div class="{% if market_data.snapshot.change_pct > 0 %}trend-up{% elif market_data.snapshot.change_pct < 0 %}trend-down{% else %}trend-flat{% endif %}" style="font-size:16px;font-weight:700;">
         {% if market_data.snapshot.change_pct > 0 %}▲{% elif market_data.snapshot.change_pct < 0 %}▼{% else %}━{% endif %}
         {{ '%+.2f'|format(market_data.snapshot.change_pct) }}%
       </div>
     </div>
   </div>
-</section>
 
-<div class="grid two" style="margin-top:16px;">
-  <section class="card">
-    <p class="section-title">价格与成交</p>
-    <div class="grid two">
-      <div><div class="muted">开盘</div><div style="font-weight:700;">{{ '%.2f'|format(market_data.snapshot.open_price) }}</div></div>
-      <div><div class="muted">最高</div><div style="font-weight:700;">{{ '%.2f'|format(market_data.snapshot.high_price) }}</div></div>
-      <div><div class="muted">最低</div><div style="font-weight:700;">{{ '%.2f'|format(market_data.snapshot.low_price) }}</div></div>
-      <div><div class="muted">成交额</div><div style="font-weight:700;">{{ '{:,.0f}'.format(market_data.snapshot.amount) }} 万</div></div>
-    </div>
-  </section>
-  <section class="card">
-    <p class="section-title">持仓视角</p>
-    {% if market_data.cost_price > 0 %}
-    <div class="row">
-      <span class="pill">成本 ¥{{ '%.2f'|format(market_data.cost_price) }}</span>
-      <span class="pill">浮盈 {{ '%+.2f'|format(pnl_pct) }}%</span>
-    </div>
-    {% else %}
-    <div class="muted">当前未设置持仓成本。</div>
-    {% endif %}
-    <p style="line-height:1.8;color:var(--text-secondary);margin:14px 0 0;">{{ cost_analysis.cost_position_analysis }}</p>
-    <p style="line-height:1.8;color:var(--text-secondary);margin:12px 0 0;">{{ cost_analysis.cost_advice }}</p>
-  </section>
-</div>
-
-<section class="card" style="margin-top:16px;">
-  <p class="section-title">核心结论</p>
-  <p style="line-height:1.85;color:var(--text-secondary);margin:0;">{{ analysis.executive_summary }}</p>
-</section>
-
-<div class="grid two" style="margin-top:16px;">
-  <section class="card">
-    <p class="section-title">盘面回顾</p>
-    <p style="line-height:1.85;color:var(--text-secondary);margin:0;">{{ analysis.market_review }}</p>
-  </section>
-  <section class="card">
-    <p class="section-title">技术信号</p>
-    <div class="stack">
-      {% for signal in analysis.technical_signals %}
-      <div class="pill" style="width:max-content;">{{ signal }}</div>
-      {% endfor %}
-    </div>
-    <p style="line-height:1.85;color:var(--text-secondary);margin:14px 0 0;">{{ analysis.technical_analysis }}</p>
-  </section>
-</div>
-
-<div class="grid two" style="margin-top:16px;">
-  <section class="card">
-    <p class="section-title">资金动向</p>
-    <div class="grid two">
-      <div><div class="muted">主力净流入</div><div style="font-weight:700;">{{ '{:,.0f}'.format(market_data.fund_flow.main_net_inflow) }} 万</div></div>
-      <div><div class="muted">超大单</div><div style="font-weight:700;">{{ '{:,.0f}'.format(market_data.fund_flow.xl_net_inflow) }} 万</div></div>
-      <div><div class="muted">大单</div><div style="font-weight:700;">{{ '{:,.0f}'.format(market_data.fund_flow.large_net_inflow) }} 万</div></div>
-      <div><div class="muted">小单</div><div style="font-weight:700;">{{ '{:,.0f}'.format(market_data.fund_flow.small_net_inflow) }} 万</div></div>
-    </div>
-    <p style="line-height:1.85;color:var(--text-secondary);margin:14px 0 0;">{{ analysis.fund_flow_analysis }}</p>
-  </section>
-  <section class="card">
-    <p class="section-title">支撑与压力</p>
-    <div class="row">
-      <span class="pill">支撑 {{ '%.2f'|format(analysis.support_price) }}</span>
-      <span class="pill">压力 {{ '%.2f'|format(analysis.resistance_price) }}</span>
-      <span class="pill">{{ analysis.bias }}</span>
-    </div>
-    <div class="stack" style="margin-top:14px;">
-      <div class="muted">均线关系：{{ market_data.indicators.price_vs_ma }}</div>
-      <div class="muted">量能状态：{{ market_data.indicators.volume_trend }}</div>
-      <div class="muted">MACD：{{ market_data.indicators.macd_status }}</div>
-    </div>
-  </section>
-</div>
-
-<div class="grid two" style="margin-top:16px;">
-  <section class="card">
-    <p class="section-title">新闻速递</p>
-    {% if news_list %}
-    <div class="stack">
-      {% for item in news_list[:5] %}
+  <section class="hero">
+    <div class="row" style="justify-content:space-between;align-items:flex-start;">
       <div>
-        <div style="font-weight:700;">{{ item.title }}</div>
-        <div class="muted" style="margin-top:4px;">{{ item.published_at.strftime('%m-%d %H:%M') }}</div>
+        <div class="pill">核心结论</div>
+        <p style="line-height:1.9;margin:16px 0 0;color:var(--text-primary);">{{ analysis.executive_summary }}</p>
       </div>
-      {% endfor %}
+      {% if market_data.cost_price > 0 %}
+      <div class="row">
+        <span class="pill">成本 ¥{{ '%.2f'|format(market_data.cost_price) }}</span>
+        <span class="pill">浮盈 {{ '%+.2f'|format(pnl_pct) }}%</span>
+      </div>
+      {% endif %}
     </div>
-    {% else %}
-    <div class="muted">暂无相关新闻</div>
-    {% endif %}
-    <p style="line-height:1.85;color:var(--text-secondary);margin:14px 0 0;">{{ analysis.news_impact }}</p>
   </section>
+
+  <div class="grid two">
+    <section class="card">
+      <p class="section-title">价格与成交</p>
+      <div class="grid two">
+        <div><div class="muted">开盘</div><div style="font-weight:700;">{{ '%.2f'|format(market_data.snapshot.open_price) }}</div></div>
+        <div><div class="muted">最高</div><div style="font-weight:700;">{{ '%.2f'|format(market_data.snapshot.high_price) }}</div></div>
+        <div><div class="muted">最低</div><div style="font-weight:700;">{{ '%.2f'|format(market_data.snapshot.low_price) }}</div></div>
+        <div><div class="muted">成交额</div><div style="font-weight:700;">{{ '{:,.0f}'.format(market_data.snapshot.amount) }} 万</div></div>
+      </div>
+    </section>
+    <section class="card">
+      <p class="section-title">持仓视角</p>
+      {% if market_data.cost_price > 0 %}
+      <p style="line-height:1.8;color:var(--text-secondary);margin:0;">{{ cost_analysis.cost_position_analysis }}</p>
+      <p style="line-height:1.8;color:var(--text-secondary);margin:12px 0 0;">{{ cost_analysis.cost_advice }}</p>
+      {% else %}
+      <div class="muted">当前未设置持仓成本。</div>
+      {% endif %}
+    </section>
+  </div>
+
+  <div class="grid two">
+    <section class="card">
+      <p class="section-title">盘面回顾</p>
+      <p style="line-height:1.85;color:var(--text-secondary);margin:0;">{{ analysis.market_review }}</p>
+    </section>
+    <section class="card">
+      <p class="section-title">技术信号</p>
+      <div class="stack">
+        {% for signal in analysis.technical_signals %}
+        <div class="pill" style="width:max-content;">{{ signal }}</div>
+        {% endfor %}
+      </div>
+      <p style="line-height:1.85;color:var(--text-secondary);margin:14px 0 0;">{{ analysis.technical_analysis }}</p>
+    </section>
+  </div>
+
+  <div class="grid two">
+    <section class="card">
+      <p class="section-title">资金动向</p>
+      <div class="grid two">
+        <div><div class="muted">主力净流入</div><div style="font-weight:700;">{{ '{:,.0f}'.format(market_data.fund_flow.main_net_inflow) }} 万</div></div>
+        <div><div class="muted">超大单</div><div style="font-weight:700;">{{ '{:,.0f}'.format(market_data.fund_flow.xl_net_inflow) }} 万</div></div>
+        <div><div class="muted">大单</div><div style="font-weight:700;">{{ '{:,.0f}'.format(market_data.fund_flow.large_net_inflow) }} 万</div></div>
+        <div><div class="muted">小单</div><div style="font-weight:700;">{{ '{:,.0f}'.format(market_data.fund_flow.small_net_inflow) }} 万</div></div>
+      </div>
+      <p style="line-height:1.85;color:var(--text-secondary);margin:14px 0 0;">{{ analysis.fund_flow_analysis }}</p>
+    </section>
+    <section class="card">
+      <p class="section-title">支撑与压力</p>
+      <div class="row">
+        <span class="pill">支撑 {{ '%.2f'|format(analysis.support_price) }}</span>
+        <span class="pill">压力 {{ '%.2f'|format(analysis.resistance_price) }}</span>
+        <span class="pill">{{ analysis.bias }}</span>
+      </div>
+      <div class="stack" style="margin-top:14px;">
+        <div class="muted">均线关系：{{ market_data.indicators.price_vs_ma }}</div>
+        <div class="muted">量能状态：{{ market_data.indicators.volume_trend }}</div>
+        <div class="muted">MACD：{{ market_data.indicators.macd_status }}</div>
+      </div>
+    </section>
+  </div>
+
+  <div class="grid two">
+    <section class="card">
+      <p class="section-title">新闻速递</p>
+      {% if news_list %}
+      <div class="stack">
+        {% for item in news_list[:5] %}
+        <div>
+          <div style="font-weight:700;">{{ item.title }}</div>
+          <div class="muted" style="margin-top:4px;">{{ item.published_at.strftime('%m-%d %H:%M') }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="muted">暂无相关新闻</div>
+      {% endif %}
+      <p style="line-height:1.85;color:var(--text-secondary);margin:14px 0 0;">{{ analysis.news_impact }}</p>
+    </section>
+    <section class="card">
+      <p class="section-title">操作建议与风险</p>
+      <p style="line-height:1.85;color:var(--text-secondary);margin:0 0 12px;">{{ analysis.action_advice }}</p>
+      <div class="stack">
+        {% for note in analysis.risk_notes %}
+        <div class="muted">⚠ {{ note }}</div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
   <section class="card">
-    <p class="section-title">操作建议与风险</p>
-    <p style="line-height:1.85;color:var(--text-secondary);margin:0 0 12px;">{{ analysis.action_advice }}</p>
-    <div class="stack">
-      {% for note in analysis.risk_notes %}
-      <div class="muted">⚠ {{ note }}</div>
-      {% endfor %}
+    <div class="report-nav">
+      <a class="button secondary {% if not previous_trade_date %}disabled{% endif %}" {% if previous_trade_date %}href="/report/{{ market_data.stock_code }}/{{ previous_trade_date }}"{% else %}style="pointer-events:none;opacity:.45;"{% endif %}>上一日</a>
+      <div class="report-nav-center">
+        <a class="button secondary" href="/dashboard">返回自选</a>
+      </div>
+      <a class="button secondary {% if not next_trade_date %}disabled{% endif %}" {% if next_trade_date %}href="/report/{{ market_data.stock_code }}/{{ next_trade_date }}"{% else %}style="pointer-events:none;opacity:.45;"{% endif %}>下一日</a>
     </div>
   </section>
 </div>
-
-<section class="card" style="margin-top:16px;">
-  <div class="row" style="justify-content:space-between;">
-    <a class="button secondary {% if not previous_trade_date %}disabled{% endif %}" {% if previous_trade_date %}href="/report/{{ market_data.stock_code }}/{{ previous_trade_date }}"{% else %}style="pointer-events:none;opacity:.45;"{% endif %}>上一日</a>
-    <a class="button secondary" href="/dashboard">返回 Dashboard</a>
-    <a class="button secondary {% if not next_trade_date %}disabled{% endif %}" {% if next_trade_date %}href="/report/{{ market_data.stock_code }}/{{ next_trade_date }}"{% else %}style="pointer-events:none;opacity:.45;"{% endif %}>下一日</a>
-  </div>
-</section>
 {% endblock %}

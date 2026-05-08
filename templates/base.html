@@ -107,7 +107,7 @@
     }
     a { color: inherit; text-decoration: none; }
     .shell {
-      width: min(100%, 672px);
+      width: min(100%, 1080px);
       margin: 0 auto;
       padding: 24px 16px 40px;
     }
@@ -350,8 +350,8 @@
       bottom: 0;
       z-index: 50;
       display: none;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
       align-items: center;
       padding: 10px 12px calc(10px + var(--safe-area-bottom));
       background: var(--bg-elevated);
@@ -361,16 +361,20 @@
     }
     .tab-link,
     .tab-action {
-      min-height: 44px;
-      display: grid;
+      width: 100%;
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       place-items: center;
-      padding: 0 8px;
-      border-radius: 14px;
+      padding: 0 12px;
+      border-radius: 16px;
       color: var(--text-secondary);
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
       border: 1px solid transparent;
       background: transparent;
+      white-space: nowrap;
     }
     .tab-link.active,
     .tab-action.active {
@@ -416,9 +420,11 @@
 </head>
 <body>
   {% set current_path = request.url.path %}
+  {% set is_report_page = current_path.startswith('/report/') %}
   <script src="/static/js/app.js"></script>
   <script src="/static/js/push.js"></script>
   <div class="shell">
+    {% if not is_report_page %}
     <nav class="nav" aria-label="主导航">
       <div class="brand">
         <small>DINGPAN</small>
@@ -426,11 +432,8 @@
       </div>
       <div class="nav-actions">
         {% if user %}
-        <a class="nav-link{% if current_path == '/dashboard' %} active{% endif %}" href="/dashboard">首页</a>
-        <a class="nav-link{% if current_path == '/settings' %} active{% endif %}" href="/settings">设置</a>
-        <button class="ghost theme-toggle" type="button" data-theme-toggle>主题：跟随系统</button>
-        <span>{{ user.email }}</span>
-        <button class="secondary" id="logout-button" type="button">退出</button>
+        <a class="nav-link{% if current_path == '/dashboard' %} active{% endif %}" href="/dashboard">自选</a>
+        <a class="nav-link{% if current_path == '/settings' %} active{% endif %}" href="/settings">我的</a>
         {% else %}
         <a class="nav-link{% if current_path == '/' %} active{% endif %}" href="/">首页</a>
         <a class="nav-link{% if current_path == '/login' %} active{% endif %}" href="/login">登录</a>
@@ -439,21 +442,15 @@
         {% endif %}
       </div>
     </nav>
+    {% endif %}
+    {% if user and not is_report_page %}
     <div class="mobile-tab-nav">
       <nav class="mobile-tab-bar" aria-label="移动端底部导航">
-        {% if user %}
-        <a class="tab-link{% if current_path == '/dashboard' %} active{% endif %}" href="/dashboard">首页</a>
-        <a class="tab-link{% if current_path == '/settings' %} active{% endif %}" href="/settings">设置</a>
-        <button class="tab-action" type="button" data-theme-toggle>主题</button>
-        <button class="tab-action" id="logout-button-mobile" type="button">退出</button>
-        {% else %}
-        <a class="tab-link{% if current_path == '/' %} active{% endif %}" href="/">首页</a>
-        <a class="tab-link{% if current_path == '/login' %} active{% endif %}" href="/login">登录</a>
-        <a class="tab-link{% if current_path == '/register' %} active{% endif %}" href="/register">注册</a>
-        <button class="tab-action" type="button" data-theme-toggle>主题</button>
-        {% endif %}
+        <a class="tab-link{% if current_path == '/dashboard' %} active{% endif %}" href="/dashboard">自选</a>
+        <a class="tab-link{% if current_path == '/settings' %} active{% endif %}" href="/settings">我的</a>
       </nav>
     </div>
+    {% endif %}
     <section class="install-banner" id="install-banner" hidden>
       <p data-install-text>安装到桌面后，可从独立应用窗口打开并单独开启推送。</p>
       <div class="row" style="justify-content:flex-end;">
@@ -463,25 +460,5 @@
     </section>
     {% block content %}{% endblock %}
   </div>
-  {% if user %}
-  <script>
-    async function handleLogout() {
-        await fetch("/api/auth/logout", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" }
-        });
-        window.location.href = "/";
-    }
-
-    const logoutButton = document.getElementById("logout-button");
-    const mobileLogoutButton = document.getElementById("logout-button-mobile");
-    if (logoutButton) {
-      logoutButton.addEventListener("click", handleLogout);
-    }
-    if (mobileLogoutButton) {
-      mobileLogoutButton.addEventListener("click", handleLogout);
-    }
-  </script>
-  {% endif %}
 </body>
 </html>

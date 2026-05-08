@@ -57,6 +57,8 @@ function applyTheme(choice) {
   });
 }
 
+window.applyThemeChoice = applyTheme;
+
 function persistTheme(choice) {
   try {
     window.localStorage.setItem(THEME_STORAGE_KEY, choice);
