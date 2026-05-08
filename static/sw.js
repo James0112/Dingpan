@@ -6,11 +6,56 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+function toAbsoluteUrl(path) {
+  try {
+    return new URL(path || "/dashboard", self.location.origin).toString();
+  } catch (error) {
+    return `${self.location.origin}/dashboard`;
+  }
+}
+
+function buildNotificationOptions(payload) {
+  const timestamp = Number(payload.timestamp || Date.now());
+  const tag = payload.tag || "dingpan-report";
+  const url = toAbsoluteUrl(payload.url);
+  const stockCode = payload.stock_code || "";
+  const tradeDate = payload.trade_date || "";
+
+  return {
+    body: payload.body,
+    icon: "/static/icons/icon-512.png",
+    badge: "/static/icons/icon-192.png",
+    image: payload.image || undefined,
+    tag,
+    renotify: Boolean(payload.renotify),
+    requireInteraction: Boolean(payload.require_interaction),
+    silent: false,
+    vibrate: [120, 40, 120],
+    timestamp,
+    lang: "zh-CN",
+    dir: "ltr",
+    actions: [
+      { action: "open-report", title: "查看日报" },
+      { action: "open-dashboard", title: "打开面板" },
+    ],
+    data: {
+      url,
+      tag,
+      stock_code: stockCode,
+      trade_date: tradeDate,
+      timestamp,
+    },
+  };
+}
+
 self.addEventListener("push", (event) => {
   let payload = {
     title: "盯盘侠",
     body: "新的日报已生成",
-    url: "/dashboard"
+    url: "/dashboard",
+    tag: "dingpan-report",
+    timestamp: Date.now(),
+    renotify: true,
   };
   if (event.data) {
     try {
@@ -20,27 +65,23 @@ self.addEventListener("push", (event) => {
     }
   }
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: "/static/icons/icon-192.png",
-      badge: "/static/icons/icon-192.png",
-      tag: "dingpan-report",
-      data: {
-        url: payload.url || "/dashboard"
-      }
-    })
+    self.registration.showNotification(payload.title, buildNotificationOptions(payload))
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || "/dashboard";
+  const targetUrl = toAbsoluteUrl(
+    event.action === "open-dashboard"
+      ? "/dashboard"
+      : event.notification.data?.url || "/dashboard"
+  );
   event.waitUntil((async () => {
     const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
     for (const client of windowClients) {
-      if ("focus" in client) {
+      if (client.url.startsWith(self.location.origin) && "focus" in client) {
         await client.focus();
-        if ("navigate" in client) {
+        if ("navigate" in client && client.url !== targetUrl) {
           await client.navigate(targetUrl);
         }
         return;
@@ -48,4 +89,9 @@ self.addEventListener("notificationclick", (event) => {
     }
     await clients.openWindow(targetUrl);
   })());
+});
+
+self.addEventListener("notificationclose", (event) => {
+  const closedTag = event.notification?.data?.tag || "unknown";
+  console.info("[dingpan-sw] notification closed:", closedTag);
 });

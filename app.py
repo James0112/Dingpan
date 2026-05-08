@@ -910,11 +910,14 @@ async def send_test_push(user=Depends(verified_user)):
             settings.db_path,
             user_id=user.id,
             payload={
-                "title": "盯盘侠测试推送",
+                "title": "盯盘侠测试通知",
                 "body": (
                     f"这是发送到 {user.email} 的测试通知。"
-                    f"系统定时推送时间为 {settings.report_push_time} {settings.report_schedule_timezone}。"
+                    f"系统定时推送时间为 {settings.report_push_time} {settings.report_schedule_timezone}，点击可返回面板。"
                 ),
+                "tag": "dingpan-test-notification",
+                "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000),
+                "renotify": True,
                 "url": "/dashboard",
             },
             public_key=settings.vapid_public_key,

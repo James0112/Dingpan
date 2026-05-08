@@ -97,8 +97,13 @@ async def run() -> int:
             f"{report_target['stock_code']}/{trade_date_text}"
         )
         payload = {
-            "title": "盯盘侠日报已生成",
-            "body": f"{report_target['stock_name'] or report_target['stock_code']} {trade_date_text} 的日报已可查看。",
+            "title": f"{report_target['stock_name'] or report_target['stock_code']} 日报已生成",
+            "body": f"{trade_date_text} 的盯盘日报已更新，点击查看完整分析与操作建议。",
+            "tag": f"dingpan-report-{trade_date_text}-{report_target['stock_code']}",
+            "stock_code": report_target["stock_code"],
+            "trade_date": trade_date_text,
+            "timestamp": int(now_utc.timestamp() * 1000),
+            "renotify": True,
             "url": report_url,
         }
         logger.info(
