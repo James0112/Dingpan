@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from datetime import date
+from datetime import date, datetime, timezone
 
 from src.analyze import AnalysisError, analyze_market_data
 from src.config import load_settings
@@ -11,6 +11,7 @@ from src.fetch_data import DataFetchError, fetch_market_data
 from src.fetch_news import fetch_news
 from src.logger import configure_logging
 from src.render_report import ANALYSIS_VERSION, analysis_result_to_json, market_data_to_json, news_list_to_json
+from src.schedule import has_reached_clock_time
 from src.trading_calendar import (
     TradingCalendarError,
     fallback_latest_trade_date,
@@ -29,6 +30,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", dest="model_id", help="Only generate one model id")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of unique stock/model pairs")
     parser.add_argument("--dry-run", action="store_true", help="Run without writing analysis_cache")
+    parser.add_argument("--force", action="store_true", help="Ignore schedule guard and regenerate existing success rows")
     return parser.parse_args()
 
 
@@ -124,6 +126,26 @@ async def upsert_analysis_cache(
         await conn.close()
 
 
+async def has_successful_cached_analysis(
+    db_path: str,
+    *,
+    stock_code: str,
+    trade_date_value: date,
+    model_id: str,
+) -> bool:
+    row = await fetch_all(
+        db_path,
+        """
+        SELECT 1
+        FROM analysis_cache
+        WHERE stock_code = ? AND trade_date = ? AND model_id = ? AND status = 'success'
+        LIMIT 1
+        """,
+        (stock_code, trade_date_value.isoformat(), model_id),
+    )
+    return bool(row)
+
+
 async def run() -> int:
     args = parse_args()
     settings = load_settings()
@@ -131,6 +153,18 @@ async def run() -> int:
     await init_db(settings.db_path)
     trade_date_value = resolve_trade_date(settings, args)
     logger.info("Resolved trade date for shared generation: %s", trade_date_value)
+    schedule_enforced = not args.force and not args.trade_date and not args.stock_code and not args.model_id
+    if schedule_enforced and not has_reached_clock_time(
+        now_utc=datetime.now(timezone.utc),
+        timezone_name=settings.report_schedule_timezone,
+        clock_time=settings.report_generate_time,
+    ):
+        logger.info(
+            "Skip shared generation: waiting for REPORT_GENERATE_TIME=%s %s",
+            settings.report_generate_time,
+            settings.report_schedule_timezone,
+        )
+        return 0
 
     targets = await load_targets(
         settings.db_path,
@@ -144,10 +178,20 @@ async def run() -> int:
 
     success_count = 0
     failure_count = 0
+    skipped_count = 0
     for target in targets:
         stock_code = target["stock_code"]
         stock_name = target["stock_name"] or stock_code
         model_id = target["model_id"]
+        if not args.force and await has_successful_cached_analysis(
+            settings.db_path,
+            stock_code=stock_code,
+            trade_date_value=trade_date_value,
+            model_id=model_id,
+        ):
+            skipped_count += 1
+            logger.info("Skip %s (%s) with %s: success cache already exists for %s", stock_code, stock_name, model_id, trade_date_value)
+            continue
         logger.info("Generating shared analysis for %s (%s) with %s", stock_code, stock_name, model_id)
         try:
             market_data = fetch_market_data(
@@ -201,7 +245,7 @@ async def run() -> int:
                     news_json="[]",
                 )
 
-    logger.info("Shared generation completed: success=%s failure=%s", success_count, failure_count)
+    logger.info("Shared generation completed: success=%s failure=%s skipped=%s", success_count, failure_count, skipped_count)
     return 0 if failure_count == 0 else 1
 
 

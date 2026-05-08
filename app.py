@@ -98,11 +98,6 @@ class PushSubscribePayload(BaseModel):
     keys: dict[str, str]
 
 
-class PushPreferencesPayload(BaseModel):
-    daily_push_time: str = Field(pattern=r"^\d{2}:\d{2}$")
-    push_timezone: str = Field(min_length=1, max_length=64)
-
-
 def _normalize_stock_code(stock_code: str) -> str:
     code = stock_code.strip().upper()
     if not code:
@@ -499,8 +494,10 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
             models=models,
             push_enabled=push_enabled,
             push_configured=bool(settings.vapid_public_key and settings.vapid_private_key and settings.vapid_claims_email),
-            daily_push_time=user.daily_push_time,
-            push_timezone=user.push_timezone,
+            report_schedule_timezone=settings.report_schedule_timezone,
+            report_generate_time=settings.report_generate_time,
+            report_email_time=settings.report_email_time,
+            report_push_time=settings.report_push_time,
         ),
     )
 
@@ -708,6 +705,10 @@ async def auth_me(user=Depends(current_user)):
         "daily_push_time": user.daily_push_time,
         "push_timezone": user.push_timezone,
         "last_daily_push_trade_date": user.last_daily_push_trade_date,
+        "report_schedule_timezone": settings.report_schedule_timezone,
+        "report_generate_time": settings.report_generate_time,
+        "report_email_time": settings.report_email_time,
+        "report_push_time": settings.report_push_time,
     }
 
 
@@ -895,22 +896,11 @@ async def unsubscribe_push(payload: dict[str, str], user=Depends(verified_user))
 
 
 @app.post("/api/push/preferences")
-async def update_push_preferences(payload: PushPreferencesPayload, user=Depends(verified_user)):
-    hour_text, minute_text = payload.daily_push_time.split(":")
-    hour = int(hour_text)
-    minute = int(minute_text)
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid daily_push_time")
-    await execute(
-        settings.db_path,
-        """
-        UPDATE users
-        SET daily_push_time = ?, push_timezone = ?
-        WHERE id = ?
-        """,
-        (payload.daily_push_time, payload.push_timezone.strip(), user.id),
+async def update_push_preferences(user=Depends(verified_user)):
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="Push delivery time is managed by system configuration.",
     )
-    return {"ok": True}
 
 
 @app.post("/api/push/test")
@@ -921,7 +911,10 @@ async def send_test_push(user=Depends(verified_user)):
             user_id=user.id,
             payload={
                 "title": "盯盘侠测试推送",
-                "body": f"这是发送到 {user.email} 的测试通知，当前设定时间为 {user.daily_push_time} {user.push_timezone}。",
+                "body": (
+                    f"这是发送到 {user.email} 的测试通知。"
+                    f"系统定时推送时间为 {settings.report_push_time} {settings.report_schedule_timezone}。"
+                ),
                 "url": "/dashboard",
             },
             public_key=settings.vapid_public_key,

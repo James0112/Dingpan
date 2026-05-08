@@ -16,6 +16,7 @@ from src.mailer import (
     mark_daily_report_delivered,
     send_daily_report_for_target,
 )
+from src.schedule import has_reached_clock_time
 from src.trading_calendar import (
     TradingCalendarError,
     fallback_latest_trade_date,
@@ -30,8 +31,8 @@ from src.trading_calendar import (
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Dispatch scheduled DingPan daily report emails")
     parser.add_argument("--date", dest="trade_date", help="Trade date in YYYY-MM-DD format")
-    parser.add_argument("--window-minutes", type=int, default=10, help="Delivery window size per user local time")
     parser.add_argument("--dry-run", action="store_true", help="Resolve due users without sending emails")
+    parser.add_argument("--force", action="store_true", help="Ignore schedule guard and dispatch immediately")
     return parser.parse_args()
 
 
@@ -59,11 +60,21 @@ async def run() -> int:
     trade_date_value = resolve_trade_date(settings, args.trade_date)
     trade_date_text = trade_date_value.isoformat()
     now_utc = datetime.now(timezone.utc)
+    schedule_enforced = not args.force and not args.trade_date
+    if schedule_enforced and not has_reached_clock_time(
+        now_utc=now_utc,
+        timezone_name=settings.report_schedule_timezone,
+        clock_time=settings.report_email_time,
+    ):
+        logger.info(
+            "Skip report emails: waiting for REPORT_EMAIL_TIME=%s %s",
+            settings.report_email_time,
+            settings.report_schedule_timezone,
+        )
+        return 0
 
     due_users = await load_due_email_users(
         settings.db_path,
-        now_utc=now_utc,
-        window_minutes=args.window_minutes,
         trade_date=trade_date_text,
     )
     logger.info("Resolved %s due email users for trade_date=%s", len(due_users), trade_date_text)
@@ -86,16 +97,15 @@ async def run() -> int:
             logger.info("Skip user %s: no unsent report targets for %s", due_user.email, trade_date_text)
             continue
         logger.info(
-            "Dispatch %s report email(s) to %s at %s %s",
+            "Dispatch %s report email(s) to %s for %s",
             len(targets),
             due_user.email,
-            due_user.daily_push_time,
-            due_user.push_timezone,
+            trade_date_text,
         )
         if args.dry_run:
             sent_count += len(targets)
             continue
-        now_local = now_utc.astimezone(ZoneInfo(due_user.push_timezone))
+        now_local = now_utc.astimezone(ZoneInfo(settings.report_schedule_timezone))
         for target in targets:
             try:
                 stock_code = await asyncio.to_thread(

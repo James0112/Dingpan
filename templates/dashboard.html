@@ -2,6 +2,84 @@
 
 {% block content %}
 {% set is_verified = user.email_verified_at %}
+{% set current_model = models[0] if models else none %}
+{% for model in models %}
+  {% if model.model_id == user.preferred_model %}
+    {% set current_model = model %}
+  {% endif %}
+{% endfor %}
+<style>
+  .custom-select {
+    position: relative;
+  }
+  .custom-select-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: #0d1326;
+    color: white;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 13px 14px;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .custom-select-trigger::after {
+    content: "⌄";
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+  .custom-select-menu {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 25;
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    background: rgba(18, 21, 40, 0.98);
+    border: 1px solid rgba(93, 173, 226, 0.18);
+    border-radius: 16px;
+    box-shadow: 0 16px 34px rgba(0, 0, 0, 0.24);
+  }
+  .custom-select-menu[hidden] {
+    display: none;
+  }
+  .custom-select-option {
+    width: 100%;
+    text-align: left;
+    background: rgba(13, 19, 38, 0.72);
+    border: 1px solid transparent;
+    border-radius: 12px;
+    padding: 12px 13px;
+  }
+  .custom-select-option.active {
+    border-color: rgba(93, 173, 226, 0.32);
+    background: linear-gradient(135deg, rgba(15, 52, 96, 0.52), rgba(13, 19, 38, 0.92));
+  }
+  .schedule-board {
+    display: grid;
+    gap: 10px;
+    margin-top: 14px;
+    padding: 14px;
+    border: 1px solid rgba(93, 173, 226, 0.14);
+    border-radius: 16px;
+    background: rgba(13, 19, 38, 0.52);
+  }
+  .schedule-board .row {
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+  }
+  .schedule-time {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+</style>
 {% if not is_verified %}
 <section class="card" style="margin-bottom:16px;border-color:#ffa502;">
   <div class="row" style="justify-content:space-between;align-items:center;">
@@ -63,6 +141,28 @@
           {% endif %}
         </p>
         <div class="card" style="padding:14px;margin-top:14px;">
+          <div class="muted">系统调度时间</div>
+          <div class="schedule-board">
+            <div class="row">
+              <span class="muted">报告生成</span>
+              <span class="schedule-time">{{ report_generate_time }}</span>
+            </div>
+            <div class="row">
+              <span class="muted">报告邮件</span>
+              <span class="schedule-time">{{ report_email_time }}</span>
+            </div>
+            <div class="row">
+              <span class="muted">应用推送</span>
+              <span class="schedule-time">{{ report_push_time }}</span>
+            </div>
+            <div class="row">
+              <span class="muted">系统时区</span>
+              <span>{{ report_schedule_timezone }}</span>
+            </div>
+          </div>
+          <p class="muted" style="margin:12px 0 0;line-height:1.8;">系统会先生成当日报告，再发送邮件，最后发送应用通知。手动测试推送不受上面的时间限制。</p>
+        </div>
+        <div class="card" style="padding:14px;margin-top:14px;">
           <div class="row" style="justify-content:space-between;align-items:center;">
             <div>
               <div class="muted">通知诊断</div>
@@ -92,30 +192,17 @@
             iPhone 必须先“添加到主屏幕”，再从桌面图标打开并单独开启推送。
           </p>
         </div>
-        <form class="stack" id="push-preferences-form" style="margin-top:14px;">
-          <div class="row">
-            <div class="field" style="flex:1;min-width:160px;">
-              <label for="daily_push_time">推送时间</label>
-              <input id="daily_push_time" name="daily_push_time" type="time" value="{{ daily_push_time }}">
-            </div>
-            <div class="field" style="flex:1;min-width:220px;">
-              <label for="push_timezone">时区</label>
-              <input id="push_timezone" name="push_timezone" value="{{ push_timezone }}" placeholder="Asia/Shanghai">
-            </div>
-          </div>
-          <div class="row">
-            <button type="submit" class="secondary" {% if not is_verified %}disabled{% endif %}>保存推送时间</button>
-            <button
-              type="button"
-              id="push-test"
-              class="secondary"
-              onclick="window.handlePushTest && window.handlePushTest()"
-              {% if (not push_configured) or (not is_verified) %}disabled title="请先验证邮箱、完成 VAPID 配置并开启推送"{% endif %}
-            >
-              发送测试推送
-            </button>
-          </div>
-        </form>
+        <div class="row" style="margin-top:14px;">
+          <button
+            type="button"
+            id="push-test"
+            class="secondary"
+            onclick="window.handlePushTest && window.handlePushTest()"
+            {% if (not push_configured) or (not is_verified) %}disabled title="请先验证邮箱、完成 VAPID 配置并开启推送"{% endif %}
+          >
+            发送测试推送
+          </button>
+        </div>
       </div>
     </div>
   </section>
@@ -137,11 +224,31 @@
       </div>
       <div class="field">
         <label for="model_id">分析模型</label>
-        <select id="model_id" name="model_id" {% if not is_verified %}disabled{% endif %}>
-          {% for model in models %}
-          <option value="{{ model.model_id }}">{{ model.display_name }} · {{ model.points_per_call }}点/次</option>
-          {% endfor %}
-        </select>
+        <div class="custom-select" id="model-select" data-disabled="{% if not is_verified %}1{% else %}0{% endif %}">
+          <input id="model_id" name="model_id" type="hidden" value="{{ current_model.model_id if current_model else 'gemini' }}">
+          <button class="custom-select-trigger" id="model-select-trigger" type="button" {% if not is_verified %}disabled{% endif %}>
+            <span id="model-select-label">
+              {% if current_model %}
+              {{ current_model.display_name }} · {{ current_model.points_per_call }}点/次
+              {% else %}
+              请选择模型
+              {% endif %}
+            </span>
+          </button>
+          <div class="custom-select-menu" id="model-select-menu" hidden>
+            {% for model in models %}
+            <button
+              class="custom-select-option {% if current_model and current_model.model_id == model.model_id %}active{% endif %}"
+              type="button"
+              data-model-id="{{ model.model_id }}"
+              data-model-label="{{ model.display_name }} · {{ model.points_per_call }}点/次"
+            >
+              <div style="font-weight:800;">{{ model.display_name }}</div>
+              <div class="muted" style="margin-top:5px;font-size:12px;">{{ model.model_id }} · {{ model.points_per_call }}点/次</div>
+            </button>
+            {% endfor %}
+          </div>
+        </div>
       </div>
       <div class="message" id="subscription-message"></div>
       <button type="submit" {% if not is_verified %}disabled{% endif %}>添加订阅</button>
@@ -204,7 +311,6 @@
   const message = document.getElementById("subscription-message");
   const pushToggle = document.getElementById("push-toggle");
   const pushMessage = document.getElementById("push-message");
-  const pushPreferencesForm = document.getElementById("push-preferences-form");
   const pushTestButton = document.getElementById("push-test");
   const pushStatusLabel = pushToggle ? pushToggle.parentElement.querySelector("div div:last-child") : null;
   const resendVerificationButton = document.getElementById("resend-verification-button");
@@ -215,6 +321,10 @@
   const diagLocalSubscription = document.getElementById("diag-local-subscription");
   const diagServerCount = document.getElementById("diag-server-count");
   const pushDiagnosticsMessage = document.getElementById("push-diagnostics-message");
+  const modelSelectTrigger = document.getElementById("model-select-trigger");
+  const modelSelectMenu = document.getElementById("model-select-menu");
+  const modelSelectLabel = document.getElementById("model-select-label");
+  const modelSelectInput = document.getElementById("model_id");
 
   function setDiagText(node, text, color = "") {
     if (!node) {
@@ -249,6 +359,26 @@
       console.error("Failed to refresh push diagnostics:", error);
       pushDiagnosticsMessage.textContent = error.message || "通知诊断读取失败";
     }
+  }
+
+  function toggleModelSelect(forceOpen) {
+    if (!modelSelectMenu || !modelSelectTrigger || modelSelectTrigger.disabled) {
+      return;
+    }
+    const nextOpen = typeof forceOpen === "boolean" ? forceOpen : modelSelectMenu.hidden;
+    modelSelectMenu.hidden = !nextOpen;
+  }
+
+  function selectModel(modelId, modelLabel) {
+    if (!modelSelectInput || !modelSelectLabel) {
+      return;
+    }
+    modelSelectInput.value = modelId;
+    modelSelectLabel.textContent = modelLabel;
+    modelSelectMenu?.querySelectorAll(".custom-select-option").forEach((option) => {
+      option.classList.toggle("active", option.dataset.modelId === modelId);
+    });
+    toggleModelSelect(false);
   }
 
   async function refreshPushState() {
@@ -318,6 +448,26 @@
     });
   }
 
+  if (modelSelectTrigger && modelSelectMenu) {
+    modelSelectTrigger.addEventListener("click", () => {
+      toggleModelSelect();
+    });
+    modelSelectMenu.querySelectorAll(".custom-select-option").forEach((option) => {
+      option.addEventListener("click", () => {
+        selectModel(option.dataset.modelId || "", option.dataset.modelLabel || "");
+      });
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    if (!modelSelectMenu || !modelSelectTrigger) {
+      return;
+    }
+    if (!modelSelectMenu.contains(event.target) && !modelSelectTrigger.contains(event.target)) {
+      toggleModelSelect(false);
+    }
+  });
+
   document.querySelectorAll(".delete-button").forEach((button) => {
     button.addEventListener("click", async () => {
       const response = await fetch(`/api/subscriptions/${button.dataset.id}`, {
@@ -356,28 +506,6 @@
         await refreshPushDiagnostics();
       }
   };
-
-  if (pushPreferencesForm) {
-    pushPreferencesForm.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      pushMessage.textContent = "正在保存推送设置...";
-      const payload = {
-        daily_push_time: pushPreferencesForm.daily_push_time.value,
-        push_timezone: pushPreferencesForm.push_timezone.value.trim()
-      };
-      const response = await fetch("/api/push/preferences", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        pushMessage.textContent = data.detail || "保存失败";
-        return;
-      }
-      pushMessage.textContent = "推送时间设置已保存。";
-    });
-  }
 
   window.handlePushTest = async function handlePushTest() {
     if (!pushTestButton || pushTestButton.disabled) {

@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -26,8 +25,6 @@ class MailerError(RuntimeError):
 class DueEmailUser:
     user_id: int
     email: str
-    push_timezone: str
-    daily_push_time: str
 
 
 _env = Environment(
@@ -118,26 +115,13 @@ def send_report_email(
     raise MailerError(f"Unexpected Resend response: {response!r}")
 
 
-def is_user_due_for_email(*, now_utc: datetime, push_timezone: str, daily_push_time: str, window_minutes: int) -> bool:
-    local_now = now_utc.astimezone(ZoneInfo(push_timezone))
-    try:
-        target_hour, target_minute = [int(part) for part in daily_push_time.split(":", 1)]
-    except ValueError:
-        return False
-    current_minutes = local_now.hour * 60 + local_now.minute
-    target_minutes = target_hour * 60 + target_minute
-    return target_minutes <= current_minutes < target_minutes + window_minutes
-
-
-async def load_due_email_users(db_path: str, *, now_utc: datetime, window_minutes: int, trade_date: str) -> list[DueEmailUser]:
+async def load_due_email_users(db_path: str, *, trade_date: str) -> list[DueEmailUser]:
     rows = await fetch_all(
         db_path,
         """
         SELECT DISTINCT
             u.id,
-            u.email,
-            u.push_timezone,
-            u.daily_push_time
+            u.email
         FROM users u
         INNER JOIN subscriptions s ON s.user_id = u.id AND s.is_active = 1
         INNER JOIN analysis_cache ac
@@ -151,24 +135,13 @@ async def load_due_email_users(db_path: str, *, now_utc: datetime, window_minute
         """,
         (trade_date,),
     )
-    due_users: list[DueEmailUser] = []
-    for row in rows:
-        if not is_user_due_for_email(
-            now_utc=now_utc,
-            push_timezone=str(row["push_timezone"]),
-            daily_push_time=str(row["daily_push_time"]),
-            window_minutes=window_minutes,
-        ):
-            continue
-        due_users.append(
-            DueEmailUser(
-                user_id=int(row["id"]),
-                email=str(row["email"]),
-                push_timezone=str(row["push_timezone"]),
-                daily_push_time=str(row["daily_push_time"]),
-            )
+    return [
+        DueEmailUser(
+            user_id=int(row["id"]),
+            email=str(row["email"]),
         )
-    return due_users
+        for row in rows
+    ]
 
 
 async def load_user_email_targets(db_path: str, *, user_id: int, trade_date: str) -> list[dict[str, object]]:

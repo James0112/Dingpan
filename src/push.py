@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from src.database import connect, execute, fetch_all, fetch_one
 
@@ -29,8 +27,6 @@ class PushKeys:
 class DuePushUser:
     user_id: int
     email: str
-    push_timezone: str
-    daily_push_time: str
     last_daily_push_trade_date: str
 
 
@@ -185,32 +181,13 @@ async def send_push_to_user(
     return delivered
 
 
-def is_user_due_for_push(
-    *,
-    now_utc: datetime,
-    push_timezone: str,
-    daily_push_time: str,
-    window_minutes: int,
-) -> bool:
-    local_now = now_utc.astimezone(ZoneInfo(push_timezone))
-    try:
-        target_hour, target_minute = [int(part) for part in daily_push_time.split(":", 1)]
-    except ValueError:
-        return False
-    current_minutes = local_now.hour * 60 + local_now.minute
-    target_minutes = target_hour * 60 + target_minute
-    return target_minutes <= current_minutes < target_minutes + window_minutes
-
-
-async def load_due_push_users(db_path: str, *, now_utc: datetime, window_minutes: int, trade_date: str) -> list[DuePushUser]:
+async def load_due_push_users(db_path: str, *, trade_date: str) -> list[DuePushUser]:
     rows = await fetch_all(
         db_path,
         """
         SELECT DISTINCT
             u.id,
             u.email,
-            u.push_timezone,
-            u.daily_push_time,
             u.last_daily_push_trade_date
         FROM users u
         INNER JOIN push_subscriptions ps ON ps.user_id = u.id
@@ -229,19 +206,10 @@ async def load_due_push_users(db_path: str, *, now_utc: datetime, window_minutes
         last_trade_date = str(row["last_daily_push_trade_date"])
         if last_trade_date == trade_date:
             continue
-        if not is_user_due_for_push(
-            now_utc=now_utc,
-            push_timezone=str(row["push_timezone"]),
-            daily_push_time=str(row["daily_push_time"]),
-            window_minutes=window_minutes,
-        ):
-            continue
         due_users.append(
             DuePushUser(
                 user_id=int(row["id"]),
                 email=str(row["email"]),
-                push_timezone=str(row["push_timezone"]),
-                daily_push_time=str(row["daily_push_time"]),
                 last_daily_push_trade_date=last_trade_date,
             )
         )

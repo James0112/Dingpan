@@ -172,6 +172,47 @@
       font-size: 14px;
       color: var(--orange);
     }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 70;
+      background: rgba(4, 6, 16, 0.58);
+      backdrop-filter: blur(10px);
+    }
+    .modal-backdrop[hidden] {
+      display: none;
+    }
+    .sheet {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      margin: 0 auto;
+      width: min(100%, 920px);
+      background: linear-gradient(180deg, rgba(20, 23, 42, 0.98), rgba(10, 10, 26, 0.98));
+      border: 1px solid rgba(93, 173, 226, 0.22);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 28px 60px rgba(0, 0, 0, 0.34);
+    }
+    .sheet-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .sheet-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .sheet-subtitle {
+      margin: 4px 0 0;
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
     .install-banner {
       position: fixed;
       left: 12px;
@@ -207,6 +248,13 @@
         right: 10px;
         bottom: 10px;
         border-radius: 16px;
+      }
+      .sheet {
+        left: 10px;
+        right: 10px;
+        bottom: 10px;
+        border-radius: 20px;
+        padding: 16px;
       }
     }
   </style>

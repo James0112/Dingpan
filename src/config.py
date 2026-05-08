@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.schedule import normalize_clock_time
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = BASE_DIR / "templates"
@@ -38,6 +40,10 @@ class Settings:
     resend_api_key: str | None = None
     mail_from_auth: str | None = None
     mail_from_reports: str | None = None
+    report_schedule_timezone: str = "Asia/Shanghai"
+    report_generate_time: str = "07:40:00"
+    report_email_time: str = "07:50:00"
+    report_push_time: str = "07:55:00"
 
 
 def _parse_bool(value: str | None, default: bool = False) -> bool:
@@ -105,4 +111,8 @@ def load_settings() -> Settings:
         resend_api_key=os.getenv("RESEND_API_KEY"),
         mail_from_auth=os.getenv("MAIL_FROM_AUTH"),
         mail_from_reports=os.getenv("MAIL_FROM_REPORTS"),
+        report_schedule_timezone=_env_or_default("REPORT_TIMEZONE", _env_or_default("TZ_NAME", "Asia/Shanghai")),
+        report_generate_time=normalize_clock_time(_env_or_default("REPORT_GENERATE_TIME", "07:40:00")),
+        report_email_time=normalize_clock_time(_env_or_default("REPORT_EMAIL_TIME", "07:50:00")),
+        report_push_time=normalize_clock_time(_env_or_default("REPORT_PUSH_TIME", "07:55:00")),
     )
