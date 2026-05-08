@@ -1,36 +1,66 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="stack">
-  <section class="hero">
-    <div class="pill">多用户 PWA 骨架已启动</div>
-    <h1 style="font-size:38px;line-height:1.08;margin:18px 0 12px;">你的 AI 持仓分析助手，开始从邮件走向网页。</h1>
-    <p class="muted" style="font-size:16px;line-height:1.8;max-width:680px;">
-      当前阶段先打通注册、登录、自选股管理和后续报告页入口。共享分析缓存、报告渲染、Push 与个性化分析会在后续阶段继续接入。
-    </p>
-    <div class="row" style="margin-top:18px;">
-      <a class="button" href="/register">立即注册</a>
-      <a class="button secondary" href="/login">已有账号，去登录</a>
-    </div>
-  </section>
+<style>
+  .landing-shell {
+    min-height: calc(100dvh - 180px);
+    display: grid;
+    place-items: center;
+  }
+  .landing-hero {
+    width: 100%;
+    max-width: 760px;
+    text-align: center;
+    display: grid;
+    gap: 18px;
+    padding: 40px 0 56px;
+  }
+  .landing-hero h1 {
+    margin: 0;
+    font-size: clamp(36px, 6vw, 56px);
+    line-height: 1.04;
+    letter-spacing: -0.04em;
+  }
+  .landing-hero p {
+    margin: 0 auto;
+    max-width: 620px;
+    color: var(--text-secondary);
+    font-size: 17px;
+    line-height: 1.9;
+  }
+  .landing-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+  @media (max-width: 640px) {
+    .landing-shell {
+      min-height: calc(100dvh - 140px);
+    }
+    .landing-hero {
+      padding: 24px 0 40px;
+      text-align: left;
+    }
+    .landing-hero p {
+      margin: 0;
+      font-size: 16px;
+    }
+    .landing-actions {
+      justify-content: flex-start;
+    }
+  }
+</style>
 
-  <section class="grid two">
-    <div class="card">
-      <p class="section-title">当前可验证</p>
-      <div class="stack muted">
-        <span>注册 / 登录 / 退出</span>
-        <span>SQLite 用户与订阅持久化</span>
-        <span>自选页 SSR 页面与空态</span>
-      </div>
+<section class="landing-shell">
+  <div class="landing-hero">
+    <h1>每日 AI 持仓分析，收盘后自动送达</h1>
+    <p>添加自选股后，系统会在每日收盘后自动分析，并把报告发送到你的邮箱。</p>
+    <div class="landing-actions">
+      <a class="button" href="/register">立即注册</a>
+      <a class="button secondary" href="/login">登录</a>
     </div>
-    <div class="card">
-      <p class="section-title">下一步接入</p>
-      <div class="stack muted">
-        <span>analysis_cache 批量生成</span>
-        <span>报告页共享分析展示</span>
-        <span>Web Push 与个性化分析</span>
-      </div>
-    </div>
-  </section>
-</div>
+  </div>
+</section>
 {% endblock %}
