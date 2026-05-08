@@ -62,6 +62,36 @@
           当前环境未配置 VAPID 公私钥，推送功能暂不可用。
           {% endif %}
         </p>
+        <div class="card" style="padding:14px;margin-top:14px;">
+          <div class="row" style="justify-content:space-between;align-items:center;">
+            <div>
+              <div class="muted">通知诊断</div>
+              <div style="font-weight:700;">用于判断当前设备是否真的处于可接收推送的安装态</div>
+            </div>
+            <button type="button" class="secondary" id="push-diagnostics-refresh">刷新状态</button>
+          </div>
+          <div class="list" style="margin-top:12px;">
+            <div class="row" style="justify-content:space-between;">
+              <span class="muted">应用安装态</span>
+              <span id="diag-standalone">-</span>
+            </div>
+            <div class="row" style="justify-content:space-between;">
+              <span class="muted">通知权限</span>
+              <span id="diag-permission">-</span>
+            </div>
+            <div class="row" style="justify-content:space-between;">
+              <span class="muted">本机订阅</span>
+              <span id="diag-local-subscription">-</span>
+            </div>
+            <div class="row" style="justify-content:space-between;">
+              <span class="muted">服务器记录数</span>
+              <span id="diag-server-count">-</span>
+            </div>
+          </div>
+          <p class="muted" id="push-diagnostics-message" style="margin:12px 0 0;line-height:1.8;">
+            iPhone 必须先“添加到主屏幕”，再从桌面图标打开并单独开启推送。
+          </p>
+        </div>
         <form class="stack" id="push-preferences-form" style="margin-top:14px;">
           <div class="row">
             <div class="field" style="flex:1;min-width:160px;">
@@ -179,6 +209,47 @@
   const pushStatusLabel = pushToggle ? pushToggle.parentElement.querySelector("div div:last-child") : null;
   const resendVerificationButton = document.getElementById("resend-verification-button");
   const verificationMessage = document.getElementById("verification-message");
+  const pushDiagnosticsRefresh = document.getElementById("push-diagnostics-refresh");
+  const diagStandalone = document.getElementById("diag-standalone");
+  const diagPermission = document.getElementById("diag-permission");
+  const diagLocalSubscription = document.getElementById("diag-local-subscription");
+  const diagServerCount = document.getElementById("diag-server-count");
+  const pushDiagnosticsMessage = document.getElementById("push-diagnostics-message");
+
+  function setDiagText(node, text, color = "") {
+    if (!node) {
+      return;
+    }
+    node.textContent = text;
+    node.style.color = color;
+  }
+
+  async function refreshPushDiagnostics() {
+    if (!window.DingPanPush || !diagStandalone) {
+      return;
+    }
+    try {
+      const diagnostics = await window.DingPanPush.getPushDiagnostics();
+      const serverStatus = diagnostics.server_status;
+      setDiagText(diagStandalone, diagnostics.standalone ? "已安装打开" : "普通浏览器标签页", diagnostics.standalone ? "#2ed573" : "#ffa502");
+      setDiagText(diagPermission, diagnostics.notification_permission, diagnostics.notification_permission === "granted" ? "#2ed573" : "#ffa502");
+      setDiagText(diagLocalSubscription, diagnostics.local_subscription ? "当前设备已订阅" : "当前设备未订阅", diagnostics.local_subscription ? "#2ed573" : "#ffa502");
+      setDiagText(diagServerCount, serverStatus ? String(serverStatus.count) : "读取失败", serverStatus && serverStatus.count > 0 ? "#2ed573" : "#ffa502");
+
+      if (diagnostics.ios && !diagnostics.standalone) {
+        pushDiagnosticsMessage.textContent = "当前是 iPhone 浏览器页，不是桌面安装态。请先“添加到主屏幕”，再从桌面图标打开。";
+      } else if (diagnostics.notification_permission !== "granted") {
+        pushDiagnosticsMessage.textContent = "通知权限尚未授予。请先允许通知，再开启推送。";
+      } else if (!diagnostics.local_subscription) {
+        pushDiagnosticsMessage.textContent = "当前设备还没有生成本机订阅。请点击“开启推送”。";
+      } else {
+        pushDiagnosticsMessage.textContent = "当前设备已经具备基本推送条件。若仍未看到横幅，请检查系统通知设置或通知中心。";
+      }
+    } catch (error) {
+      console.error("Failed to refresh push diagnostics:", error);
+      pushDiagnosticsMessage.textContent = error.message || "通知诊断读取失败";
+    }
+  }
 
   async function refreshPushState() {
     if (!pushToggle || pushToggle.disabled) {
@@ -241,6 +312,12 @@
     });
   }
 
+  if (pushDiagnosticsRefresh) {
+    pushDiagnosticsRefresh.addEventListener("click", async () => {
+      await refreshPushDiagnostics();
+    });
+  }
+
   document.querySelectorAll(".delete-button").forEach((button) => {
     button.addEventListener("click", async () => {
       const response = await fetch(`/api/subscriptions/${button.dataset.id}`, {
@@ -276,6 +353,7 @@
       } finally {
         pushToggle.disabled = false;
         await refreshPushState();
+        await refreshPushDiagnostics();
       }
   };
 
@@ -315,12 +393,15 @@
       if (!response.ok) {
         pushMessage.textContent = data.detail || "测试推送失败";
         await refreshPushState();
+        await refreshPushDiagnostics();
         return;
       }
       pushMessage.textContent = `测试推送已发送，送达设备数：${data.delivered}`;
       await refreshPushState();
+      await refreshPushDiagnostics();
   };
 
   refreshPushState();
+  refreshPushDiagnostics();
 </script>
 {% endblock %}

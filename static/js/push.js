@@ -16,11 +16,27 @@ async function getExistingSubscription() {
   return registration.pushManager.getSubscription();
 }
 
+function isStandaloneMode() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+}
+
+function getNotificationPermissionState() {
+  if (!("Notification" in window)) {
+    return "unsupported";
+  }
+  return Notification.permission;
+}
+
 async function ensureServiceWorker() {
   if (!("serviceWorker" in navigator)) {
     throw new Error("当前浏览器不支持 Service Worker");
   }
-  return navigator.serviceWorker.register("/sw.js");
+  await navigator.serviceWorker.register("/sw.js");
+  return navigator.serviceWorker.ready;
 }
 
 async function ensureNotificationPermission() {
@@ -40,6 +56,9 @@ async function ensureNotificationPermission() {
 }
 
 async function subscribePush() {
+  if (isIOS() && !isStandaloneMode()) {
+    throw new Error("iPhone 请先把站点添加到主屏幕，再从桌面图标打开后开启推送");
+  }
   await ensureNotificationPermission();
   const registration = await ensureServiceWorker();
   const vapidResponse = await fetch("/api/push/vapid-key");
@@ -85,8 +104,23 @@ async function fetchPushStatus() {
   return data;
 }
 
+async function getPushDiagnostics() {
+  const serverStatus = await fetchPushStatus().catch(() => null);
+  const subscription = await getExistingSubscription().catch(() => null);
+  return {
+    standalone: isStandaloneMode(),
+    ios: isIOS(),
+    notification_permission: getNotificationPermissionState(),
+    local_subscription: Boolean(subscription),
+    server_status: serverStatus,
+  };
+}
+
 window.DingPanPush = {
   getExistingSubscription,
+  getPushDiagnostics,
+  getNotificationPermissionState,
+  isStandaloneMode,
   subscribePush,
   unsubscribePush,
   ensureServiceWorker,
