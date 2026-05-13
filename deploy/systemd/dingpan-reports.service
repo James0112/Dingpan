@@ -1,0 +1,16 @@
+[Unit]
+Description=DingPan Report Email Dispatch
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/dingpan
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/var/www/dingpan/.venv/bin/python /var/www/dingpan/send_reports.py --force
+TimeoutStartSec=10min
+
+[Install]
+WantedBy=multi-user.target

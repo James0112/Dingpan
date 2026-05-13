@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from src.schemas import AnalysisResult, CostAnalysis, MarketData, NewsItem
+
+
+logger = logging.getLogger("dingpan")
 
 
 def _change_style(change_pct: float) -> tuple[str, str]:
@@ -125,5 +129,8 @@ def render_email(
     )
 
     html_path = output_dir / f"dingpan_report_{market_data.latest_trade_date:%Y%m%d}_{market_data.stock_code}.html"
-    html_path.write_text(html, encoding="utf-8")
+    try:
+        html_path.write_text(html, encoding="utf-8")
+    except OSError as exc:
+        logger.warning("Failed to write rendered HTML artifact %s: %s", html_path, exc)
     return subject, html_path, html

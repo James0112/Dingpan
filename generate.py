@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import json
+import multiprocessing
 import sys
 from datetime import date, datetime, timezone
+from queue import Empty
 
 from src.analyze import AnalysisError, analyze_market_data
 from src.config import load_settings
@@ -23,6 +26,124 @@ from src.trading_calendar import (
 )
 
 
+def _build_failure_result(trade_date_value: date, error_message: str) -> dict[str, str]:
+    return {
+        "status": "failed",
+        "error_message": error_message,
+        "trade_date": trade_date_value.isoformat(),
+        "market_data_json": "{}",
+        "analysis_json": "{}",
+        "news_json": "[]",
+    }
+
+
+def _generate_target_worker(
+    result_queue,
+    settings,
+    target: dict[str, str],
+    trade_date_text: str,
+) -> None:
+    logger = configure_logging()
+    stock_code = target["stock_code"]
+    stock_name = target["stock_name"] or stock_code
+    model_id = target["model_id"]
+    requested_trade_date = date.fromisoformat(trade_date_text)
+    try:
+        logger.info("Fetching market data for %s (%s)", stock_code, stock_name)
+        market_data = fetch_market_data(
+            stock_code=stock_code,
+            stock_name=stock_name,
+            cost_price=0.0,
+            latest_trade_date=requested_trade_date,
+        )
+        logger.info(
+            "Fetched market data for %s (%s): trade_date=%s",
+            stock_code,
+            stock_name,
+            market_data.latest_trade_date,
+        )
+        logger.info("Fetching news for %s (%s)", stock_code, stock_name)
+        news_list = fetch_news(
+            stock_code=stock_code,
+            latest_trade_date=market_data.latest_trade_date,
+            lookback_hours=settings.news_lookback_hours,
+            max_items=settings.max_news_items,
+        )
+        logger.info("Fetched %s news item(s) for %s (%s)", len(news_list), stock_code, stock_name)
+        logger.info("Generating AI analysis for %s (%s) with %s", stock_code, stock_name, model_id)
+        analysis = analyze_market_data(
+            api_key=settings.gemini_api_key or "",
+            model_id=model_id,
+            model_name=settings.model_name,
+            market_data=market_data,
+            news_list=news_list,
+            fallback_model_name=settings.fallback_model_name,
+        )
+        result_queue.put(
+            {
+                "status": "success",
+                "error_message": "",
+                "trade_date": market_data.latest_trade_date.isoformat(),
+                "market_data_json": market_data_to_json(market_data),
+                "analysis_json": analysis_result_to_json(analysis),
+                "news_json": news_list_to_json(news_list),
+            }
+        )
+    except (DataFetchError, AnalysisError, ValueError) as exc:
+        result_queue.put(_build_failure_result(requested_trade_date, str(exc)))
+    except Exception as exc:  # pragma: no cover - defensive guard
+        result_queue.put(_build_failure_result(requested_trade_date, f"Unexpected error: {exc}"))
+
+
+def _run_target_with_timeout(settings, target: dict[str, str], trade_date_value: date) -> dict[str, str]:
+    stock_code = target["stock_code"]
+    stock_name = target["stock_name"] or stock_code
+    model_id = target["model_id"]
+    timeout_seconds = settings.generate_target_timeout_seconds
+    ctx = multiprocessing.get_context("spawn")
+    result_queue = ctx.Queue(maxsize=1)
+    process = ctx.Process(
+        target=_generate_target_worker,
+        args=(result_queue, settings, target, trade_date_value.isoformat()),
+    )
+    process.start()
+    process.join(timeout_seconds)
+
+    if process.is_alive():
+        process.terminate()
+        process.join(5)
+        if process.is_alive():
+            process.kill()
+            process.join(5)
+        result_queue.close()
+        result_queue.join_thread()
+        return _build_failure_result(
+            trade_date_value,
+            (
+                f"Timed out after {timeout_seconds}s while generating shared analysis "
+                f"[stock={stock_code} model={model_id} name={stock_name}]"
+            ),
+        )
+
+    try:
+        payload = result_queue.get_nowait()
+    except Empty:
+        payload = _build_failure_result(
+            trade_date_value,
+            (
+                f"Worker exited without result (exit_code={process.exitcode}) "
+                f"[stock={stock_code} model={model_id} name={stock_name}]"
+            ),
+        )
+    finally:
+        result_queue.close()
+        result_queue.join_thread()
+
+    if payload["status"] == "failed":
+        payload["error_message"] = f"{payload['error_message']} [stock={stock_code} model={model_id} name={stock_name}]"
+    return payload
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate DingPan shared analysis cache")
     parser.add_argument("--date", dest="trade_date", help="Trade date in YYYY-MM-DD format")
@@ -31,6 +152,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, default=0, help="Limit number of unique stock/model pairs")
     parser.add_argument("--dry-run", action="store_true", help="Run without writing analysis_cache")
     parser.add_argument("--force", action="store_true", help="Ignore schedule guard and regenerate existing success rows")
+    parser.add_argument(
+        "--today-if-trading-day",
+        action="store_true",
+        help="Use today's trade date when today is a trading day; otherwise fall back to the latest previous trade date",
+    )
     return parser.parse_args()
 
 
@@ -44,8 +170,12 @@ def resolve_trade_date(settings, args: argparse.Namespace) -> date:
             raise TradingCalendarError("Trade calendar is stale")
         if not is_today_trading_day(today, trade_dates):
             return get_latest_trade_date(today, trade_dates)
+        if args.today_if_trading_day:
+            return today
         return get_latest_trade_date(today, trade_dates)
     except TradingCalendarError:
+        if args.today_if_trading_day and today.weekday() < 5:
+            return today
         return fallback_latest_trade_date(today)
 
 
@@ -193,56 +323,39 @@ async def run() -> int:
             logger.info("Skip %s (%s) with %s: success cache already exists for %s", stock_code, stock_name, model_id, trade_date_value)
             continue
         logger.info("Generating shared analysis for %s (%s) with %s", stock_code, stock_name, model_id)
-        try:
-            market_data = fetch_market_data(
-                stock_code=stock_code,
-                stock_name=stock_name,
-                cost_price=0.0,
-                latest_trade_date=trade_date_value,
-            )
-            news_list = fetch_news(
-                stock_code=stock_code,
-                latest_trade_date=market_data.latest_trade_date,
-                lookback_hours=settings.news_lookback_hours,
-                max_items=settings.max_news_items,
-            )
-            analysis = analyze_market_data(
-                api_key=settings.gemini_api_key or "",
-                model_id=model_id,
-                model_name=settings.model_name,
-                market_data=market_data,
-                news_list=news_list,
-                fallback_model_name=settings.fallback_model_name,
-            )
+        result = _run_target_with_timeout(settings, target, trade_date_value)
+        result_trade_date = date.fromisoformat(result["trade_date"])
+        if result["status"] == "success":
             if not args.dry_run:
+                market_payload = json.loads(result["market_data_json"])
                 await upsert_analysis_cache(
                     settings.db_path,
                     stock_code=stock_code,
-                    stock_name=market_data.stock_name,
-                    trade_date_value=market_data.latest_trade_date,
+                    stock_name=str(market_payload.get("stock_name", stock_name)),
+                    trade_date_value=result_trade_date,
                     model_id=model_id,
                     status="success",
                     error_message="",
-                    market_data_json=market_data_to_json(market_data),
-                    analysis_json=analysis_result_to_json(analysis),
-                    news_json=news_list_to_json(news_list),
+                    market_data_json=result["market_data_json"],
+                    analysis_json=result["analysis_json"],
+                    news_json=result["news_json"],
                 )
             success_count += 1
-        except (DataFetchError, AnalysisError, ValueError) as exc:
-            logger.error("Shared analysis failed for %s/%s: %s", stock_code, model_id, exc)
+        else:
+            logger.error("Shared analysis failed for %s/%s: %s", stock_code, model_id, result["error_message"])
             failure_count += 1
             if not args.dry_run:
                 await upsert_analysis_cache(
                     settings.db_path,
                     stock_code=stock_code,
                     stock_name=stock_name,
-                    trade_date_value=trade_date_value,
+                    trade_date_value=result_trade_date,
                     model_id=model_id,
                     status="failed",
-                    error_message=str(exc),
-                    market_data_json="{}",
-                    analysis_json="{}",
-                    news_json="[]",
+                    error_message=result["error_message"],
+                    market_data_json=result["market_data_json"],
+                    analysis_json=result["analysis_json"],
+                    news_json=result["news_json"],
                 )
 
     logger.info("Shared generation completed: success=%s failure=%s skipped=%s", success_count, failure_count, skipped_count)

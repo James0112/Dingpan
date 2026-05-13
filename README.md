@@ -80,6 +80,7 @@ export DISABLE_PROXY="true"
 export MODEL_ID="gemini"
 export GEMINI_MODEL="gemini-3-flash-preview"
 export GEMINI_FALLBACK_MODEL="gemini-2.5-flash-lite"
+export GENERATE_TARGET_TIMEOUT_SECONDS="180"
 ```
 
 Web Push 变量：
@@ -143,6 +144,7 @@ python generate.py
 python generate.py --stock 603212
 python generate.py --date 2026-05-07
 python generate.py --dry-run
+python generate.py --today-if-trading-day
 ```
 
 6. 本地测试 Web Push：
@@ -225,12 +227,16 @@ python send_reports.py --date 2026-05-08
 - 1 个定时任务执行 `send_push.py`
 - Nginx 反向代理并启用 HTTPS
 
+推荐使用仓库内的 `deploy/systemd/` 单元文件，而不是直接写一个长期常驻的 `simple` service。
+`generate.py` 和 `send_reports.py` 都应配置为 `Type=oneshot`，并加上 `TimeoutStartSec`，避免一次外部接口阻塞把后续所有 timer 调度堵死。
+
 ### 最小调度建议
 
 共享分析缓存：
 
 ```cron
-*/15 8-18 * * 1-5 cd /path/to/dingpan && /path/to/.venv/bin/python generate.py >> logs/generate.log 2>&1
+30 15 * * 1-5 cd /path/to/dingpan && /path/to/.venv/bin/python generate.py --force --today-if-trading-day >> logs/generate_close.log 2>&1
+20 7 * * 1-5 cd /path/to/dingpan && /path/to/.venv/bin/python generate.py --force >> logs/generate_refresh.log 2>&1
 ```
 
 日报 Push：
@@ -242,13 +248,15 @@ python send_reports.py --date 2026-05-08
 日报邮件：
 
 ```cron
-*/5 * * * * cd /path/to/dingpan && /path/to/.venv/bin/python send_reports.py >> logs/send_reports.log 2>&1
+45 7 * * 1-5 cd /path/to/dingpan && /path/to/.venv/bin/python send_reports.py --force >> logs/send_reports.log 2>&1
 ```
 
 说明：
-- `generate.py` 的频率按你对行情更新的需求调整
+- 建议收盘后 `15:30` 生成当天交易日缓存
+- 建议次日早上 `07:20` 再补刷新一次前一交易日缓存，补齐隔夜新闻
 - `send_push.py` 建议每 5 分钟跑一次
 - 脚本内部有用户时间窗口判断和当日去重，不会无限重复推
+- `generate.py` 现在默认对单只股票设置 `180` 秒硬超时；若某只股票卡在 AKShare、新闻或 Gemini 请求，该股票会记为失败并继续处理其他股票，不会让整个生成进程无限挂起
 
 ## GitHub Actions 部署
 

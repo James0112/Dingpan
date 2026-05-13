@@ -1,0 +1,10 @@
+[Unit]
+Description=Run DingPan previous-trade-day shared analysis refresh every morning
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 07:20:00
+Persistent=true
+Unit=dingpan-generate-refresh.service
+
+[Install]
+WantedBy=timers.target

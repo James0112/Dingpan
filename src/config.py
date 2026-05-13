@@ -44,6 +44,7 @@ class Settings:
     report_generate_time: str = "07:40:00"
     report_email_time: str = "07:50:00"
     report_push_time: str = "07:55:00"
+    generate_target_timeout_seconds: int = 180
 
 
 def _parse_bool(value: str | None, default: bool = False) -> bool:
@@ -115,4 +116,5 @@ def load_settings() -> Settings:
         report_generate_time=normalize_clock_time(_env_or_default("REPORT_GENERATE_TIME", "07:40:00")),
         report_email_time=normalize_clock_time(_env_or_default("REPORT_EMAIL_TIME", "07:50:00")),
         report_push_time=normalize_clock_time(_env_or_default("REPORT_PUSH_TIME", "07:55:00")),
+        generate_target_timeout_seconds=int(_env_or_default("GENERATE_TARGET_TIMEOUT_SECONDS", "180")),
     )

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run DingPan scheduled report emails every morning
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 07:45:00
+Persistent=true
+Unit=dingpan-reports.service
+
+[Install]
+WantedBy=timers.target

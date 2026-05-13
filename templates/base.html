@@ -54,9 +54,10 @@
       --color-primary: #2563eb;
       --color-primary-strong: #1d4ed8;
       --shadow-soft: 0 18px 40px rgba(15, 23, 42, 0.08);
-      --tab-bar-height: 64px;
+      --tab-bar-height: 56px;
+      --safe-area-top: env(safe-area-inset-top, 0px);
       --safe-area-bottom: env(safe-area-inset-bottom, 0px);
-      --page-bottom-spacing: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 16px);
+      --page-bottom-spacing: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 8px);
       --border: var(--border-color);
       --blue: var(--color-primary);
       --orange: var(--color-cost);
@@ -392,7 +393,9 @@
     }
     @media (max-width: 640px) {
       .shell {
-        padding: 16px 12px var(--page-bottom-spacing);
+        min-height: 100vh;
+        min-height: 100dvh;
+        padding: calc(var(--safe-area-top) + 12px) 12px var(--page-bottom-spacing);
       }
       .nav {
         display: none;
@@ -403,16 +406,26 @@
       .mobile-tab-bar {
         display: grid;
       }
+      .mobile-tab-nav {
+        height: 0;
+      }
+      .mobile-tab-bar {
+        padding: 8px 12px calc(8px + var(--safe-area-bottom));
+      }
+      .tab-link,
+      .tab-action {
+        min-height: 48px;
+      }
       .install-banner {
         left: 10px;
         right: 10px;
-        bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 8px);
+        bottom: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 6px);
         border-radius: 16px;
       }
       .sheet {
         left: 10px;
         right: 10px;
-        bottom: 10px;
+        bottom: calc(var(--safe-area-bottom) + 8px);
         border-radius: 20px;
         padding: 16px;
       }

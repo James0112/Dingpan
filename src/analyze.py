@@ -167,8 +167,18 @@ def analyze_market_data(
         model_name=model_name,
         fallback_model_name=fallback_model_name,
     )
-    try:
-        raw_text = provider.generate(prompt, GenerateConfig())
-    except Exception as exc:  # pragma: no cover - provider/runtime dependent
-        raise AnalysisError(f"{model_id} analysis failed: {exc}") from exc
-    return _parse_response(raw_text, market_data)
+    last_error: AnalysisError | None = None
+    for attempt in range(3):
+        try:
+            raw_text = provider.generate(prompt, GenerateConfig())
+        except Exception as exc:  # pragma: no cover - provider/runtime dependent
+            raise AnalysisError(f"{model_id} analysis failed: {exc}") from exc
+        try:
+            return _parse_response(raw_text, market_data)
+        except AnalysisError as exc:
+            last_error = exc
+            if attempt == 2:
+                break
+    if last_error is not None:
+        raise last_error
+    raise AnalysisError(f"{model_id} analysis failed without a model response")

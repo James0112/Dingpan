@@ -1,0 +1,10 @@
+[Unit]
+Description=Run DingPan same-day close shared analysis generation
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 15:30:00
+Persistent=true
+Unit=dingpan-generate.service
+
+[Install]
+WantedBy=timers.target
