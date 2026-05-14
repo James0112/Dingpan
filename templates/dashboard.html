@@ -237,15 +237,33 @@
     }
   }
   @media (max-width: 899px) {
+    .watch-shell {
+      min-height: calc(100svh - var(--safe-area-top) - var(--page-bottom-spacing) - 24px);
+      display: flex;
+      flex-direction: column;
+    }
     .page-header {
       align-items: flex-start;
       flex-direction: column;
+    }
+    .watch-layout {
+      flex: 1;
+    }
+    .watch-main {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .stock-grid {
+      align-content: start;
     }
     .watch-sidebar {
       display: none;
     }
     .mobile-schedule {
       display: block;
+      margin-top: auto;
+      padding-top: 16px;
     }
     .modal-backdrop[data-dialog-mode="desktop"] {
       display: none !important;
