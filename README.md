@@ -217,6 +217,12 @@ python send_reports.py --dry-run
 python send_reports.py --date 2026-05-08
 ```
 
+手动测试某个交易日但不占用次日正式日报去重：
+
+```bash
+python send_reports.py --date 2026-05-08 --delivery-type manual_test
+```
+
 ## 部署建议
 
 线上最小部署建议：

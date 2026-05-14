@@ -13,7 +13,7 @@ from src.mailer import (
     MailerError,
     load_due_email_users,
     load_user_email_targets,
-    mark_daily_report_delivered,
+    mark_report_delivered,
     send_daily_report_for_target,
 )
 from src.schedule import has_reached_clock_time
@@ -33,7 +33,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--date", dest="trade_date", help="Trade date in YYYY-MM-DD format")
     parser.add_argument("--dry-run", action="store_true", help="Resolve due users without sending emails")
     parser.add_argument("--force", action="store_true", help="Ignore schedule guard and dispatch immediately")
+    parser.add_argument(
+        "--delivery-type",
+        choices=("auto", "daily_report", "manual_test"),
+        default="auto",
+        help="Delivery marker type. Defaults to manual_test when --date is specified, otherwise daily_report.",
+    )
     return parser.parse_args()
+
+
+def resolve_delivery_type(args: argparse.Namespace) -> str:
+    if args.delivery_type != "auto":
+        return args.delivery_type
+    if args.trade_date:
+        return "manual_test"
+    return "daily_report"
 
 
 def resolve_trade_date(settings, explicit_trade_date: str | None) -> date:
@@ -59,6 +73,7 @@ async def run() -> int:
 
     trade_date_value = resolve_trade_date(settings, args.trade_date)
     trade_date_text = trade_date_value.isoformat()
+    delivery_type = resolve_delivery_type(args)
     now_utc = datetime.now(timezone.utc)
     schedule_enforced = not args.force and not args.trade_date
     if schedule_enforced and not has_reached_clock_time(
@@ -77,7 +92,12 @@ async def run() -> int:
         settings.db_path,
         trade_date=trade_date_text,
     )
-    logger.info("Resolved %s due email users for trade_date=%s", len(due_users), trade_date_text)
+    logger.info(
+        "Resolved %s due email users for trade_date=%s delivery_type=%s",
+        len(due_users),
+        trade_date_text,
+        delivery_type,
+    )
     if not due_users:
         return 0
 
@@ -92,15 +112,22 @@ async def run() -> int:
             settings.db_path,
             user_id=due_user.user_id,
             trade_date=trade_date_text,
+            delivery_type=delivery_type,
         )
         if not targets:
-            logger.info("Skip user %s: no unsent report targets for %s", due_user.email, trade_date_text)
+            logger.info(
+                "Skip user %s: no unsent report targets for %s delivery_type=%s",
+                due_user.email,
+                trade_date_text,
+                delivery_type,
+            )
             continue
         logger.info(
-            "Dispatch %s report email(s) to %s for %s",
+            "Dispatch %s report email(s) to %s for %s delivery_type=%s",
             len(targets),
             due_user.email,
             trade_date_text,
+            delivery_type,
         )
         if args.dry_run:
             sent_count += len(targets)
@@ -119,11 +146,12 @@ async def run() -> int:
                     trade_date_text=trade_date_text,
                     now_local=now_local,
                 )
-                await mark_daily_report_delivered(
+                await mark_report_delivered(
                     settings.db_path,
                     user_id=due_user.user_id,
                     stock_code=stock_code,
                     trade_date=trade_date_text,
+                    delivery_type=delivery_type,
                     sent_at_iso=now_utc.isoformat(),
                 )
                 sent_count += 1

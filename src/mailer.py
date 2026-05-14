@@ -144,7 +144,13 @@ async def load_due_email_users(db_path: str, *, trade_date: str) -> list[DueEmai
     ]
 
 
-async def load_user_email_targets(db_path: str, *, user_id: int, trade_date: str) -> list[dict[str, object]]:
+async def load_user_email_targets(
+    db_path: str,
+    *,
+    user_id: int,
+    trade_date: str,
+    delivery_type: str,
+) -> list[dict[str, object]]:
     rows = await fetch_all(
         db_path,
         """
@@ -166,32 +172,33 @@ async def load_user_email_targets(db_path: str, *, user_id: int, trade_date: str
             ON ed.user_id = s.user_id
             AND ed.stock_code = s.stock_code
             AND ed.trade_date = ?
-            AND ed.delivery_type = 'daily_report'
+            AND ed.delivery_type = ?
         WHERE s.user_id = ?
           AND s.is_active = 1
           AND ed.id IS NULL
         ORDER BY s.sort_order ASC, s.id ASC
         """,
-        (trade_date, trade_date, user_id),
+        (trade_date, trade_date, delivery_type, user_id),
     )
     return [dict(row) for row in rows]
 
 
-async def mark_daily_report_delivered(
+async def mark_report_delivered(
     db_path: str,
     *,
     user_id: int,
     stock_code: str,
     trade_date: str,
+    delivery_type: str,
     sent_at_iso: str,
 ) -> None:
     await execute(
         db_path,
         """
         INSERT OR IGNORE INTO email_deliveries (user_id, stock_code, trade_date, delivery_type, sent_at)
-        VALUES (?, ?, ?, 'daily_report', ?)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (user_id, stock_code, trade_date, sent_at_iso),
+        (user_id, stock_code, trade_date, delivery_type, sent_at_iso),
     )
 
 
