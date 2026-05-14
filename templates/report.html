@@ -336,18 +336,9 @@
   </section>
 </div>
 <script>
-  const reportBackLink = document.getElementById("report-back-link");
   const reportBackbar = document.getElementById("report-backbar");
   const reportTopbar = document.getElementById("report-topbar");
   const reportRefreshButton = document.getElementById("report-refresh");
-  if (reportBackLink) {
-    reportBackLink.addEventListener("click", (event) => {
-      if (window.history.length > 1) {
-        event.preventDefault();
-        window.history.back();
-      }
-    });
-  }
   if (reportBackbar && reportTopbar) {
     const syncBackbarState = () => {
       const topbarBottom = reportTopbar.getBoundingClientRect().bottom;
