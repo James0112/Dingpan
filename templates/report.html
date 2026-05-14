@@ -37,6 +37,12 @@
     font-weight: 700;
     border-radius: 12px;
   }
+  .report-backicon {
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1;
+    transform: translateY(-1px);
+  }
   .report-backlink:hover {
     color: var(--text-primary);
   }
@@ -166,7 +172,7 @@
 <div class="report-shell">
   <div class="report-backbar" id="report-backbar">
     <a class="report-backlink" href="/dashboard" id="report-back-link" aria-label="返回自选">
-      <span aria-hidden="true">←</span>
+      <span class="report-backicon" aria-hidden="true">‹</span>
       <span>自选</span>
     </a>
     <div class="report-backtitle" id="report-backtitle">{{ market_data.stock_name }} {{ market_data.stock_code }}</div>
