@@ -7,11 +7,19 @@
     margin: 0 auto;
     display: grid;
     gap: 16px;
+    padding-bottom: calc(88px + var(--safe-area-bottom));
   }
   .report-backbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
     display: flex;
     align-items: center;
-    min-height: 44px;
+    justify-content: space-between;
+    min-height: 52px;
+    padding: 8px 0;
+    background: linear-gradient(180deg, var(--bg-body) 72%, rgba(245, 245, 247, 0));
+    backdrop-filter: blur(12px);
   }
   .report-backlink {
     display: inline-flex;
@@ -26,6 +34,29 @@
   }
   .report-backlink:hover {
     color: var(--text-primary);
+  }
+  .report-backtitle {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+    padding: 0 12px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 160ms ease, transform 160ms ease;
+  }
+  .report-backbar.compact .report-backtitle {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .report-backbar-spacer {
+    width: 56px;
+    flex: 0 0 56px;
   }
   .report-topbar {
     display: flex;
@@ -60,12 +91,39 @@
     color: var(--text-muted);
   }
   .report-nav {
-    display: flex;
-    justify-content: space-between;
+    position: sticky;
+    bottom: 12px;
+    z-index: 35;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
     gap: 10px;
-    flex-wrap: wrap;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-soft);
+    backdrop-filter: blur(16px);
+  }
+  .report-nav .button {
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .report-nav .button:last-child {
+    justify-self: end;
+  }
+  .report-nav-date {
+    padding: 0 12px;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+    white-space: nowrap;
   }
   @media (max-width: 640px) {
+    .report-shell {
+      padding-bottom: calc(94px + var(--safe-area-bottom));
+    }
     .report-topbar {
       flex-direction: column;
       align-items: flex-start;
@@ -74,22 +132,33 @@
       text-align: left;
     }
     .report-nav {
-      flex-direction: column;
+      left: 0;
+      right: 0;
+      bottom: 8px;
+      gap: 8px;
+      padding: 8px;
     }
     .report-nav .button {
-      width: 100%;
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    .report-nav-date {
+      font-size: 13px;
+      padding: 0 4px;
     }
   }
 </style>
 
 <div class="report-shell">
-  <div class="report-backbar">
+  <div class="report-backbar" id="report-backbar">
     <a class="report-backlink" href="/dashboard" id="report-back-link" aria-label="返回自选">
       <span aria-hidden="true">←</span>
       <span>自选</span>
     </a>
+    <div class="report-backtitle" id="report-backtitle">{{ market_data.stock_name }} {{ market_data.stock_code }}</div>
+    <div class="report-backbar-spacer" aria-hidden="true"></div>
   </div>
-  <div class="report-topbar">
+  <div class="report-topbar" id="report-topbar">
     <div>
       <h1 style="margin:0;">{{ market_data.stock_name }} {{ market_data.stock_code }}</h1>
       <div class="muted" style="margin-top:6px;">{{ market_data.latest_trade_date }} · {{ model_id }}</div>
@@ -209,15 +278,16 @@
     </section>
   </div>
 
-  <section class="card">
-    <div class="report-nav">
+  <section class="report-nav" aria-label="报告日期切换">
       <a class="button secondary {% if not previous_trade_date %}disabled{% endif %}" {% if previous_trade_date %}href="/report/{{ market_data.stock_code }}/{{ previous_trade_date }}"{% else %}style="pointer-events:none;opacity:.45;"{% endif %}>上一日</a>
+      <div class="report-nav-date">{{ market_data.latest_trade_date }}</div>
       <a class="button secondary {% if not next_trade_date %}disabled{% endif %}" {% if next_trade_date %}href="/report/{{ market_data.stock_code }}/{{ next_trade_date }}"{% else %}style="pointer-events:none;opacity:.45;"{% endif %}>下一日</a>
-    </div>
   </section>
 </div>
 <script>
   const reportBackLink = document.getElementById("report-back-link");
+  const reportBackbar = document.getElementById("report-backbar");
+  const reportTopbar = document.getElementById("report-topbar");
   if (reportBackLink) {
     reportBackLink.addEventListener("click", (event) => {
       if (window.history.length > 1) {
@@ -225,6 +295,14 @@
         window.history.back();
       }
     });
+  }
+  if (reportBackbar && reportTopbar) {
+    const syncBackbarState = () => {
+      const topbarBottom = reportTopbar.getBoundingClientRect().bottom;
+      reportBackbar.classList.toggle("compact", topbarBottom <= 72);
+    };
+    window.addEventListener("scroll", syncBackbarState, { passive: true });
+    syncBackbarState();
   }
 </script>
 {% endblock %}

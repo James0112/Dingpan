@@ -965,6 +965,29 @@ async def admin_update_user(managed_user_id: int, payload: AdminUserUpdatePayloa
     }
 
 
+@app.delete("/api/admin/users/{managed_user_id}")
+async def admin_delete_user(managed_user_id: int, user=Depends(admin_user)):
+    row = await fetch_one(
+        settings.db_path,
+        """
+        SELECT id, email
+        FROM users
+        WHERE id = ?
+        """,
+        (managed_user_id,),
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if int(row["id"]) == user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete current admin account")
+    await execute(
+        settings.db_path,
+        "DELETE FROM users WHERE id = ?",
+        (managed_user_id,),
+    )
+    return {"ok": True, "id": managed_user_id, "email": str(row["email"])}
+
+
 @app.get("/api/subscriptions")
 async def list_subscriptions(user=Depends(verified_user)):
     rows = await fetch_all(

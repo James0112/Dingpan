@@ -80,6 +80,10 @@
     color: var(--text-muted);
     font-size: 13px;
   }
+  .danger-button {
+    border-color: rgba(220, 74, 74, 0.24) !important;
+    color: var(--color-up) !important;
+  }
 </style>
 
 <div class="admin-shell">
@@ -136,11 +140,16 @@
         <button class="secondary" type="button" data-admin-action="toggle-active">
           {% if item.is_active %}停用账户{% else %}启用账户{% endif %}
         </button>
-        <button class="secondary" type="button" data-admin-action="toggle-verified">
-          {% if item.email_verified_at %}取消验证{% else %}标记已验证{% endif %}
+        {% if not item.email_verified_at %}
+        <button class="secondary" type="button" data-admin-action="verify-user">
+          设为已验证
         </button>
+        {% endif %}
         <button class="secondary" type="button" data-admin-action="toggle-email">
           {% if item.daily_email_enabled %}关闭日报邮件{% else %}开启日报邮件{% endif %}
+        </button>
+        <button class="secondary danger-button" type="button" data-admin-action="delete-user">
+          删除用户
         </button>
       </div>
       <div class="admin-status" data-admin-status></div>
@@ -163,6 +172,18 @@
     return data.user;
   }
 
+  async function deleteAdminUser(userId) {
+    const response = await fetch(`/api/admin/users/${userId}`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.detail || "删除失败");
+    }
+    return data;
+  }
+
   function updateAdminCard(card, userState) {
     const activePill = card.querySelector('[data-status-pill="active"]');
     const verifiedPill = card.querySelector('[data-status-pill="verified"]');
@@ -177,13 +198,15 @@
       emailPill.textContent = userState.daily_email_enabled ? "邮件开启" : "邮件关闭";
     }
     const activeButton = card.querySelector('[data-admin-action="toggle-active"]');
-    const verifiedButton = card.querySelector('[data-admin-action="toggle-verified"]');
+    const verifiedButton = card.querySelector('[data-admin-action="verify-user"]');
     const emailButton = card.querySelector('[data-admin-action="toggle-email"]');
     if (activeButton) {
       activeButton.textContent = userState.is_active ? "停用账户" : "启用账户";
     }
     if (verifiedButton) {
-      verifiedButton.textContent = userState.email_verified_at ? "取消验证" : "标记已验证";
+      if (userState.email_verified_at) {
+        verifiedButton.remove();
+      }
     }
     if (emailButton) {
       emailButton.textContent = userState.daily_email_enabled ? "关闭日报邮件" : "开启日报邮件";
@@ -198,16 +221,24 @@
       button.addEventListener("click", async () => {
         const action = button.dataset.adminAction;
         const activeButton = card.querySelector('[data-admin-action="toggle-active"]');
-        const verifiedButton = card.querySelector('[data-admin-action="toggle-verified"]');
         const emailButton = card.querySelector('[data-admin-action="toggle-email"]');
         const nextPayload = {};
 
         if (action === "toggle-active") {
           nextPayload.is_active = activeButton.textContent === "启用账户";
-        } else if (action === "toggle-verified") {
-          nextPayload.email_verified = verifiedButton.textContent === "标记已验证";
+        } else if (action === "verify-user") {
+          nextPayload.email_verified = true;
         } else if (action === "toggle-email") {
           nextPayload.daily_email_enabled = emailButton.textContent === "开启日报邮件";
+        } else if (action === "delete-user") {
+          const email = card.querySelector(".admin-email")?.textContent?.trim() || "该用户";
+          const confirmed = window.confirm(
+            `确认删除 ${email} 吗？\n\n这会同时删除该用户的订阅、推送订阅、邮件投递记录等关联数据，且无法恢复。`
+          );
+          if (!confirmed) {
+            status.textContent = "已取消删除";
+            return;
+          }
         }
 
         card.querySelectorAll("[data-admin-action]").forEach((item) => {
@@ -216,6 +247,11 @@
         status.textContent = "正在更新...";
 
         try {
+          if (action === "delete-user") {
+            await deleteAdminUser(userId);
+            card.remove();
+            return;
+          }
           const userState = await patchAdminUser(userId, nextPayload);
           updateAdminCard(card, userState);
           status.textContent = "已更新";
