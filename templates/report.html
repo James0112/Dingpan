@@ -3,6 +3,8 @@
 {% block content %}
 <style>
   .report-shell {
+    --report-safe-area-top: max(var(--safe-area-top), env(safe-area-inset-top, 0px));
+    --report-top-clearance: calc(var(--report-safe-area-top) + 12px);
     max-width: 760px;
     margin: 0 auto;
     display: grid;
@@ -18,8 +20,11 @@
     justify-content: space-between;
     min-height: 52px;
     padding: 8px 0;
-    background: linear-gradient(180deg, var(--bg-body) 72%, rgba(245, 245, 247, 0));
+    background: linear-gradient(180deg, var(--bg-body) 78%, rgba(245, 245, 247, 0));
     backdrop-filter: blur(12px);
+  }
+  [data-theme="dark"] .report-backbar {
+    background: linear-gradient(180deg, var(--bg-body) 78%, rgba(18, 18, 18, 0));
   }
   .report-backlink {
     display: inline-flex;
@@ -53,6 +58,9 @@
   .report-backbar.compact .report-backtitle {
     opacity: 1;
     transform: translateY(0);
+  }
+  .report-backbar.compact {
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
   }
   .report-backbar-spacer {
     width: 56px;
@@ -122,7 +130,13 @@
   }
   @media (max-width: 640px) {
     .report-shell {
+      margin-top: calc(-1 * var(--report-top-clearance));
       padding-bottom: calc(94px + var(--safe-area-bottom));
+    }
+    .report-backbar {
+      min-height: calc(52px + var(--report-top-clearance));
+      margin: 0 -2px;
+      padding: var(--report-top-clearance) 2px 10px;
     }
     .report-topbar {
       flex-direction: column;
