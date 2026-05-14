@@ -8,6 +8,25 @@
     display: grid;
     gap: 16px;
   }
+  .report-backbar {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .report-backlink {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 4px;
+    color: var(--text-secondary);
+    font-size: 15px;
+    font-weight: 700;
+    border-radius: 12px;
+  }
+  .report-backlink:hover {
+    color: var(--text-primary);
+  }
   .report-topbar {
     display: flex;
     justify-content: space-between;
@@ -46,10 +65,6 @@
     gap: 10px;
     flex-wrap: wrap;
   }
-  .report-nav-center {
-    display: flex;
-    gap: 10px;
-  }
   @media (max-width: 640px) {
     .report-topbar {
       flex-direction: column;
@@ -61,18 +76,22 @@
     .report-nav {
       flex-direction: column;
     }
-    .report-nav-center {
+    .report-nav .button {
       width: 100%;
-      justify-content: space-between;
     }
   }
 </style>
 
 <div class="report-shell">
+  <div class="report-backbar">
+    <a class="report-backlink" href="/dashboard" id="report-back-link" aria-label="返回自选">
+      <span aria-hidden="true">←</span>
+      <span>自选</span>
+    </a>
+  </div>
   <div class="report-topbar">
     <div>
-      <a class="button secondary" href="/dashboard">← 返回自选</a>
-      <h1 style="margin-top:14px;">{{ market_data.stock_name }} {{ market_data.stock_code }}</h1>
+      <h1 style="margin:0;">{{ market_data.stock_name }} {{ market_data.stock_code }}</h1>
       <div class="muted" style="margin-top:6px;">{{ market_data.latest_trade_date }} · {{ model_id }}</div>
     </div>
     <div class="report-price">
@@ -193,11 +212,19 @@
   <section class="card">
     <div class="report-nav">
       <a class="button secondary {% if not previous_trade_date %}disabled{% endif %}" {% if previous_trade_date %}href="/report/{{ market_data.stock_code }}/{{ previous_trade_date }}"{% else %}style="pointer-events:none;opacity:.45;"{% endif %}>上一日</a>
-      <div class="report-nav-center">
-        <a class="button secondary" href="/dashboard">返回自选</a>
-      </div>
       <a class="button secondary {% if not next_trade_date %}disabled{% endif %}" {% if next_trade_date %}href="/report/{{ market_data.stock_code }}/{{ next_trade_date }}"{% else %}style="pointer-events:none;opacity:.45;"{% endif %}>下一日</a>
     </div>
   </section>
 </div>
+<script>
+  const reportBackLink = document.getElementById("report-back-link");
+  if (reportBackLink) {
+    reportBackLink.addEventListener("click", (event) => {
+      if (window.history.length > 1) {
+        event.preventDefault();
+        window.history.back();
+      }
+    });
+  }
+</script>
 {% endblock %}
