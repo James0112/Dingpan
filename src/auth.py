@@ -14,6 +14,7 @@ from src.database import fetch_one
 
 
 SESSION_COOKIE_NAME = "dingpan_session"
+ADMIN_EMAILS = {"jyxsxs@gmail.com"}
 
 
 @dataclass(frozen=True)
@@ -27,6 +28,11 @@ class AuthUser:
     daily_push_time: str
     push_timezone: str
     last_daily_push_trade_date: str
+    is_admin: bool
+
+
+def is_admin_email(email: str) -> bool:
+    return email.strip().lower() in ADMIN_EMAILS
 
 
 def hash_password(password: str) -> str:
@@ -123,6 +129,7 @@ async def get_optional_user(request: Request, db_path: str, jwt_secret: str) -> 
         daily_push_time=str(row["daily_push_time"]),
         push_timezone=str(row["push_timezone"]),
         last_daily_push_trade_date=str(row["last_daily_push_trade_date"]),
+        is_admin=is_admin_email(str(row["email"])),
     )
 
 

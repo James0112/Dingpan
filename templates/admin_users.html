@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+  .admin-shell {
+    display: grid;
+    gap: 16px;
+  }
+  .admin-header {
+    display: grid;
+    gap: 8px;
+  }
+  .admin-title {
+    margin: 0;
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+  .admin-copy {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+  .admin-list {
+    display: grid;
+    gap: 14px;
+  }
+  .admin-card {
+    display: grid;
+    gap: 14px;
+    padding: 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-soft);
+  }
+  .admin-card-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: start;
+    flex-wrap: wrap;
+  }
+  .admin-email {
+    font-size: 19px;
+    font-weight: 800;
+    word-break: break-all;
+  }
+  .admin-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .admin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+  }
+  .admin-stat {
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+  }
+  .admin-stat-label {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .admin-stat-value {
+    margin-top: 6px;
+    font-weight: 700;
+  }
+  .admin-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .admin-status {
+    min-height: 20px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+</style>
+
+<div class="admin-shell">
+  <section class="admin-header">
+    <h1 class="admin-title">账户管理</h1>
+    <p class="admin-copy">这里只给超级管理员使用。可查看全部账户状态，并直接调整启用、验证和日报邮件开关。</p>
+  </section>
+
+  <section class="admin-list" id="admin-user-list">
+    {% for item in managed_users %}
+    <article class="admin-card" data-user-id="{{ item.id }}">
+      <div class="admin-card-head">
+        <div>
+          <div class="admin-email">{{ item.email }}</div>
+          <div class="admin-meta" style="margin-top:10px;">
+            <span class="pill" data-status-pill="active">{% if item.is_active %}启用中{% else %}已停用{% endif %}</span>
+            <span class="pill" data-status-pill="verified">{% if item.email_verified_at %}已验证{% else %}未验证{% endif %}</span>
+            <span class="pill" data-status-pill="email">{% if item.daily_email_enabled %}邮件开启{% else %}邮件关闭{% endif %}</span>
+          </div>
+        </div>
+        {% if item.email == user.email %}
+        <span class="pill">当前管理员</span>
+        {% endif %}
+      </div>
+
+      <div class="admin-grid">
+        <div class="admin-stat">
+          <div class="admin-stat-label">用户 ID</div>
+          <div class="admin-stat-value">{{ item.id }}</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">订阅股票</div>
+          <div class="admin-stat-value">{{ item.subscription_count }}</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">推送设备</div>
+          <div class="admin-stat-value">{{ item.push_device_count }}</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">默认模型</div>
+          <div class="admin-stat-value">{{ item.preferred_model }}</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">积分</div>
+          <div class="admin-stat-value">{{ item.points_balance }}</div>
+        </div>
+        <div class="admin-stat">
+          <div class="admin-stat-label">最后日报发送</div>
+          <div class="admin-stat-value">{{ item.last_email_sent_at or "未发送" }}</div>
+        </div>
+      </div>
+
+      <div class="admin-actions">
+        <button class="secondary" type="button" data-admin-action="toggle-active">
+          {% if item.is_active %}停用账户{% else %}启用账户{% endif %}
+        </button>
+        <button class="secondary" type="button" data-admin-action="toggle-verified">
+          {% if item.email_verified_at %}取消验证{% else %}标记已验证{% endif %}
+        </button>
+        <button class="secondary" type="button" data-admin-action="toggle-email">
+          {% if item.daily_email_enabled %}关闭日报邮件{% else %}开启日报邮件{% endif %}
+        </button>
+      </div>
+      <div class="admin-status" data-admin-status></div>
+    </article>
+    {% endfor %}
+  </section>
+</div>
+
+<script>
+  async function patchAdminUser(userId, payload) {
+    const response = await fetch(`/api/admin/users/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.detail || "更新失败");
+    }
+    return data.user;
+  }
+
+  function updateAdminCard(card, userState) {
+    const activePill = card.querySelector('[data-status-pill="active"]');
+    const verifiedPill = card.querySelector('[data-status-pill="verified"]');
+    const emailPill = card.querySelector('[data-status-pill="email"]');
+    if (activePill) {
+      activePill.textContent = userState.is_active ? "启用中" : "已停用";
+    }
+    if (verifiedPill) {
+      verifiedPill.textContent = userState.email_verified_at ? "已验证" : "未验证";
+    }
+    if (emailPill) {
+      emailPill.textContent = userState.daily_email_enabled ? "邮件开启" : "邮件关闭";
+    }
+    const activeButton = card.querySelector('[data-admin-action="toggle-active"]');
+    const verifiedButton = card.querySelector('[data-admin-action="toggle-verified"]');
+    const emailButton = card.querySelector('[data-admin-action="toggle-email"]');
+    if (activeButton) {
+      activeButton.textContent = userState.is_active ? "停用账户" : "启用账户";
+    }
+    if (verifiedButton) {
+      verifiedButton.textContent = userState.email_verified_at ? "取消验证" : "标记已验证";
+    }
+    if (emailButton) {
+      emailButton.textContent = userState.daily_email_enabled ? "关闭日报邮件" : "开启日报邮件";
+    }
+  }
+
+  document.querySelectorAll("[data-user-id]").forEach((card) => {
+    const status = card.querySelector("[data-admin-status]");
+    const userId = card.dataset.userId;
+
+    card.querySelectorAll("[data-admin-action]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const action = button.dataset.adminAction;
+        const activeButton = card.querySelector('[data-admin-action="toggle-active"]');
+        const verifiedButton = card.querySelector('[data-admin-action="toggle-verified"]');
+        const emailButton = card.querySelector('[data-admin-action="toggle-email"]');
+        const nextPayload = {};
+
+        if (action === "toggle-active") {
+          nextPayload.is_active = activeButton.textContent === "启用账户";
+        } else if (action === "toggle-verified") {
+          nextPayload.email_verified = verifiedButton.textContent === "标记已验证";
+        } else if (action === "toggle-email") {
+          nextPayload.daily_email_enabled = emailButton.textContent === "开启日报邮件";
+        }
+
+        card.querySelectorAll("[data-admin-action]").forEach((item) => {
+          item.disabled = true;
+        });
+        status.textContent = "正在更新...";
+
+        try {
+          const userState = await patchAdminUser(userId, nextPayload);
+          updateAdminCard(card, userState);
+          status.textContent = "已更新";
+        } catch (error) {
+          status.textContent = error.message || "更新失败";
+        } finally {
+          card.querySelectorAll("[data-admin-action]").forEach((item) => {
+            item.disabled = false;
+          });
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

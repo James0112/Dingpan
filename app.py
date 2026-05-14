@@ -114,6 +114,12 @@ class PushSubscribePayload(BaseModel):
     keys: dict[str, str]
 
 
+class AdminUserUpdatePayload(BaseModel):
+    is_active: bool | None = None
+    email_verified: bool | None = None
+    daily_email_enabled: bool | None = None
+
+
 def _normalize_stock_code(stock_code: str) -> str:
     code = stock_code.strip().upper()
     if not code:
@@ -153,6 +159,13 @@ async def page_user_or_redirect(request: Request):
     user = await get_optional_user(request, settings.db_path, settings.jwt_secret)
     if user is None:
         return None
+    return user
+
+
+async def admin_user(request: Request):
+    user = await require_user(request, settings.db_path, settings.jwt_secret)
+    if not user.is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return user
 
 
@@ -686,6 +699,50 @@ async def settings_page(request: Request, user=Depends(page_user_or_redirect)):
     )
 
 
+@app.get("/admin/users", response_class=HTMLResponse)
+async def admin_users_page(request: Request, user=Depends(admin_user)):
+    rows = await fetch_all(
+        settings.db_path,
+        """
+        SELECT
+            u.id,
+            u.email,
+            u.is_active,
+            u.email_verified_at,
+            u.daily_email_enabled,
+            u.preferred_model,
+            u.points_balance,
+            u.created_at,
+            COUNT(DISTINCT s.id) AS subscription_count,
+            COUNT(DISTINCT ps.id) AS push_device_count,
+            MAX(ed.sent_at) AS last_email_sent_at
+        FROM users u
+        LEFT JOIN subscriptions s
+            ON s.user_id = u.id AND s.is_active = 1
+        LEFT JOIN push_subscriptions ps
+            ON ps.user_id = u.id
+        LEFT JOIN email_deliveries ed
+            ON ed.user_id = u.id AND ed.delivery_type = 'daily_report'
+        GROUP BY
+            u.id,
+            u.email,
+            u.is_active,
+            u.email_verified_at,
+            u.daily_email_enabled,
+            u.preferred_model,
+            u.points_balance,
+            u.created_at
+        ORDER BY u.created_at DESC, u.id DESC
+        """,
+    )
+    users = [dict(row) for row in rows]
+    return templates.TemplateResponse(
+        request,
+        "admin_users.html",
+        _template_context(request, title="账户管理", user=user, managed_users=users),
+    )
+
+
 @app.post("/api/auth/register")
 async def register(request: Request, payload: RegisterPayload):
     _require_mailer_config()
@@ -744,6 +801,7 @@ async def auth_me(user=Depends(current_user)):
     return {
         "id": user.id,
         "email": user.email,
+        "is_admin": user.is_admin,
         "preferred_model": user.preferred_model,
         "points_balance": user.points_balance,
         "email_verified": bool(user.email_verified_at),
@@ -820,6 +878,91 @@ async def update_email_preferences(payload: EmailPreferencesPayload, user=Depend
     if payload.daily_email_enabled and not user.email_verified_at:
         return {"ok": True, "message": "请先验证邮箱，验证后才能开启每日报告邮件。", "daily_email_enabled": False}
     return {"ok": True, "message": "每日报告邮件设置已更新。", "daily_email_enabled": payload.daily_email_enabled}
+
+
+@app.get("/api/admin/users")
+async def admin_list_users(user=Depends(admin_user)):
+    rows = await fetch_all(
+        settings.db_path,
+        """
+        SELECT
+            u.id,
+            u.email,
+            u.is_active,
+            u.email_verified_at,
+            u.daily_email_enabled,
+            u.preferred_model,
+            u.points_balance,
+            u.created_at,
+            COUNT(DISTINCT s.id) AS subscription_count,
+            COUNT(DISTINCT ps.id) AS push_device_count,
+            MAX(ed.sent_at) AS last_email_sent_at
+        FROM users u
+        LEFT JOIN subscriptions s
+            ON s.user_id = u.id AND s.is_active = 1
+        LEFT JOIN push_subscriptions ps
+            ON ps.user_id = u.id
+        LEFT JOIN email_deliveries ed
+            ON ed.user_id = u.id AND ed.delivery_type = 'daily_report'
+        GROUP BY
+            u.id,
+            u.email,
+            u.is_active,
+            u.email_verified_at,
+            u.daily_email_enabled,
+            u.preferred_model,
+            u.points_balance,
+            u.created_at
+        ORDER BY u.created_at DESC, u.id DESC
+        """,
+    )
+    return {"items": [dict(row) for row in rows]}
+
+
+@app.patch("/api/admin/users/{managed_user_id}")
+async def admin_update_user(managed_user_id: int, payload: AdminUserUpdatePayload, user=Depends(admin_user)):
+    row = await fetch_one(
+        settings.db_path,
+        """
+        SELECT id, email, is_active, email_verified_at, daily_email_enabled
+        FROM users
+        WHERE id = ?
+        """,
+        (managed_user_id,),
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if int(row["id"]) == user.id and payload.is_active is False:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot deactivate current admin account")
+
+    next_is_active = int(payload.is_active) if payload.is_active is not None else int(row["is_active"])
+    next_email_verified_at = str(row["email_verified_at"])
+    if payload.email_verified is not None:
+        next_email_verified_at = datetime.now(timezone.utc).isoformat() if payload.email_verified else ""
+
+    if payload.daily_email_enabled is None:
+        next_daily_email_enabled = int(row["daily_email_enabled"])
+    else:
+        next_daily_email_enabled = 1 if payload.daily_email_enabled and next_email_verified_at else 0
+
+    await execute(
+        settings.db_path,
+        """
+        UPDATE users
+        SET is_active = ?, email_verified_at = ?, daily_email_enabled = ?
+        WHERE id = ?
+        """,
+        (next_is_active, next_email_verified_at, next_daily_email_enabled, managed_user_id),
+    )
+    return {
+        "ok": True,
+        "user": {
+            "id": managed_user_id,
+            "is_active": bool(next_is_active),
+            "email_verified_at": next_email_verified_at,
+            "daily_email_enabled": bool(next_daily_email_enabled),
+        },
+    }
 
 
 @app.get("/api/subscriptions")

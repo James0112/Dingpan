@@ -220,6 +220,21 @@
     </article>
   </section>
 
+  {% if user.is_admin %}
+  <section class="settings-section">
+    <p class="settings-header">管理</p>
+    <article class="settings-item">
+      <div class="settings-item-head">
+        <div>
+          <div class="settings-item-title">超级管理员</div>
+          <div class="settings-item-copy">查看全部账户状态，并直接调整启用、验证和日报邮件权限。</div>
+        </div>
+        <a class="button secondary" href="/admin/users">进入管理页</a>
+      </div>
+    </article>
+  </section>
+  {% endif %}
+
   <section class="settings-section">
     <p class="settings-header">安全</p>
     <article class="settings-item">
