@@ -13,10 +13,38 @@
     font-weight: 800;
     letter-spacing: -0.03em;
   }
+  .page-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
   .page-subtitle {
     margin: 6px 0 0;
     color: var(--text-secondary);
     line-height: 1.7;
+  }
+  .icon-button {
+    min-width: 48px;
+    min-height: 48px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: var(--shadow-soft);
+    flex: 0 0 auto;
+  }
+  .icon-button.refreshing {
+    opacity: 0.7;
+    cursor: wait;
+  }
+  .refresh-icon {
+    font-size: 18px;
+    line-height: 1;
   }
   .settings-section {
     display: grid;
@@ -286,7 +314,12 @@
 
 <div class="settings-shell">
   <section class="settings-section">
-    <h1 class="page-title" style="margin:0;">我的</h1>
+    <div class="page-title-row">
+      <h1 class="page-title" style="margin:0;">我的</h1>
+      <button class="icon-button" type="button" id="settings-refresh" aria-label="刷新页面" title="刷新页面">
+        <span class="refresh-icon" aria-hidden="true">↻</span>
+      </button>
+    </div>
     <p class="page-subtitle">把通知、外观和账户安全收在一个地方，首页只保留看盘本身。</p>
   </section>
 
@@ -474,6 +507,7 @@
   const passwordMessage = document.getElementById("password-message");
   const logoutButton = document.getElementById("logout-button");
   const themeMessage = document.getElementById("theme-message");
+  const settingsRefreshButton = document.getElementById("settings-refresh");
   const modelSelect = document.getElementById("model-select");
   const modelTrigger = document.getElementById("model-trigger");
   const modelMenu = document.getElementById("model-menu");
@@ -782,6 +816,14 @@
         headers: { "Content-Type": "application/json" }
       });
       window.location.href = "/";
+    });
+  }
+
+  if (settingsRefreshButton) {
+    settingsRefreshButton.addEventListener("click", () => {
+      settingsRefreshButton.disabled = true;
+      settingsRefreshButton.classList.add("refreshing");
+      window.location.reload();
     });
   }
 

@@ -139,6 +139,27 @@
     flex-wrap: wrap;
     align-items: center;
   }
+  .icon-button {
+    min-width: 48px;
+    min-height: 48px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-elevated);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: var(--shadow-soft);
+  }
+  .icon-button.refreshing {
+    opacity: 0.7;
+    cursor: wait;
+  }
+  .refresh-icon {
+    font-size: 18px;
+    line-height: 1;
+  }
   .schedule-copy {
     color: var(--text-secondary);
     line-height: 1.8;
@@ -299,6 +320,9 @@
           <p class="page-subtitle">每天只看最重要的结论，点进单只股票再看完整报告。</p>
         </div>
         <div class="watch-actions">
+          <button class="icon-button" type="button" id="dashboard-refresh" aria-label="刷新页面" title="刷新页面">
+            <span class="refresh-icon" aria-hidden="true">↻</span>
+          </button>
           <button class="button" type="button" id="open-add-stock" {% if not is_verified %}disabled{% endif %}>+ 添加股票</button>
         </div>
       </div>
@@ -406,10 +430,19 @@
   const verificationMessage = document.getElementById("verification-message");
   const addStockModal = document.getElementById("add-stock-modal");
   const addStockSheet = document.getElementById("add-stock-sheet");
+  const dashboardRefreshButton = document.getElementById("dashboard-refresh");
   const openAddButtons = [
     document.getElementById("open-add-stock"),
     document.getElementById("open-add-stock-desktop")
   ].filter(Boolean);
+
+  if (dashboardRefreshButton) {
+    dashboardRefreshButton.addEventListener("click", () => {
+      dashboardRefreshButton.disabled = true;
+      dashboardRefreshButton.classList.add("refreshing");
+      window.location.reload();
+    });
+  }
 
   function activeDialog() {
     return window.matchMedia("(min-width: 900px)").matches ? addStockModal : addStockSheet;

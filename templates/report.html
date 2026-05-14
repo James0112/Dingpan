@@ -46,6 +46,28 @@
   .report-backlink:hover {
     color: var(--text-primary);
   }
+  .report-refresh {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    box-shadow: var(--shadow-soft);
+    flex: 0 0 auto;
+  }
+  .report-refresh.refreshing {
+    opacity: 0.7;
+    cursor: wait;
+  }
+  .report-refresh-icon {
+    font-size: 18px;
+    line-height: 1;
+  }
   .report-backtitle {
     flex: 1;
     min-width: 0;
@@ -180,7 +202,9 @@
       <span>自选</span>
     </a>
     <div class="report-backtitle" id="report-backtitle">{{ market_data.stock_name }} {{ market_data.stock_code }}</div>
-    <div class="report-backbar-spacer" aria-hidden="true"></div>
+    <button class="report-refresh" type="button" id="report-refresh" aria-label="刷新页面" title="刷新页面">
+      <span class="report-refresh-icon" aria-hidden="true">↻</span>
+    </button>
   </div>
   <div class="report-topbar" id="report-topbar">
     <div>
@@ -312,6 +336,7 @@
   const reportBackLink = document.getElementById("report-back-link");
   const reportBackbar = document.getElementById("report-backbar");
   const reportTopbar = document.getElementById("report-topbar");
+  const reportRefreshButton = document.getElementById("report-refresh");
   if (reportBackLink) {
     reportBackLink.addEventListener("click", (event) => {
       if (window.history.length > 1) {
@@ -327,6 +352,13 @@
     };
     window.addEventListener("scroll", syncBackbarState, { passive: true });
     syncBackbarState();
+  }
+  if (reportRefreshButton) {
+    reportRefreshButton.addEventListener("click", () => {
+      reportRefreshButton.disabled = true;
+      reportRefreshButton.classList.add("refreshing");
+      window.location.reload();
+    });
   }
 </script>
 {% endblock %}
