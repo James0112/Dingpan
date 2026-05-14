@@ -117,6 +117,16 @@
   .model-select {
     position: relative;
   }
+  .model-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 75;
+    background: rgba(15, 23, 42, 0.32);
+    backdrop-filter: blur(6px);
+  }
+  .model-backdrop[hidden] {
+    display: none;
+  }
   .model-trigger {
     width: 100%;
     display: flex;
@@ -173,6 +183,9 @@
   .model-menu[hidden] {
     display: none;
   }
+  .model-menu-header {
+    display: none;
+  }
   .model-option {
     width: 100%;
     display: flex;
@@ -218,11 +231,54 @@
     align-items: center;
   }
   @media (max-width: 640px) {
+    body.model-sheet-open {
+      overflow: hidden;
+    }
     .settings-item-head {
       align-items: flex-start;
     }
     .settings-item-head.password-row {
       align-items: center;
+    }
+    .model-backdrop {
+      display: block;
+    }
+    .model-menu {
+      position: fixed;
+      top: auto;
+      left: 12px;
+      right: 12px;
+      bottom: calc(12px + var(--safe-area-bottom));
+      z-index: 80;
+      max-height: min(68vh, 520px);
+      padding: 12px;
+      border-radius: 24px;
+      overflow: hidden;
+    }
+    .model-menu-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 4px 12px;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 8px;
+    }
+    .model-menu-title {
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .model-menu-close {
+      min-width: 72px;
+      padding: 10px 12px;
+    }
+    .model-menu-list {
+      max-height: calc(min(68vh, 520px) - 72px);
+      overflow: auto;
+      display: grid;
+      gap: 8px;
+      padding-right: 2px;
+      -webkit-overflow-scrolling: touch;
     }
   }
 </style>
@@ -307,6 +363,7 @@
       <div class="settings-item-title">默认分析模型</div>
       <div class="settings-item-copy">默认使用当前模型，需要时可展开切换到其它可选模型。</div>
       <div class="model-select" id="model-select">
+        <div class="model-backdrop" id="model-backdrop" hidden></div>
         <button class="model-trigger" type="button" id="model-trigger" aria-expanded="false" aria-haspopup="listbox">
           <div class="model-trigger-copy">
             <div class="model-trigger-title" id="model-trigger-title">
@@ -319,23 +376,29 @@
           <span class="model-trigger-caret" aria-hidden="true">⌄</span>
         </button>
         <div class="model-menu" id="model-menu" role="listbox" hidden>
-          {% for model in models %}
-          <button
-            class="model-option{% if model.model_id == user.preferred_model %} is-active{% endif %}"
-            type="button"
-            data-model-option
-            data-model-id="{{ model.model_id }}"
-            data-model-name="{{ model.display_name }}"
-            role="option"
-            aria-selected="{% if model.model_id == user.preferred_model %}true{% else %}false{% endif %}"
-          >
-            <div class="model-option-copy">
-              <div class="model-option-title">{{ model.display_name }}</div>
-              <div class="model-option-subtitle">{{ model.model_id }} · {{ model.points_per_call }} 点/次</div>
-            </div>
-            <span class="model-option-check" aria-hidden="true">✓</span>
-          </button>
-          {% endfor %}
+          <div class="model-menu-header">
+            <div class="model-menu-title">选择默认模型</div>
+            <button class="secondary model-menu-close" type="button" id="model-menu-close">关闭</button>
+          </div>
+          <div class="model-menu-list">
+            {% for model in models %}
+            <button
+              class="model-option{% if model.model_id == user.preferred_model %} is-active{% endif %}"
+              type="button"
+              data-model-option
+              data-model-id="{{ model.model_id }}"
+              data-model-name="{{ model.display_name }}"
+              role="option"
+              aria-selected="{% if model.model_id == user.preferred_model %}true{% else %}false{% endif %}"
+            >
+              <div class="model-option-copy">
+                <div class="model-option-title">{{ model.display_name }}</div>
+                <div class="model-option-subtitle">{{ model.model_id }} · {{ model.points_per_call }} 点/次</div>
+              </div>
+              <span class="model-option-check" aria-hidden="true">✓</span>
+            </button>
+            {% endfor %}
+          </div>
         </div>
       </div>
       <div class="settings-meta" id="model-message">当前默认模型会用于新增订阅时的默认选择。</div>
@@ -413,9 +476,15 @@
   const modelSelect = document.getElementById("model-select");
   const modelTrigger = document.getElementById("model-trigger");
   const modelMenu = document.getElementById("model-menu");
+  const modelBackdrop = document.getElementById("model-backdrop");
+  const modelMenuClose = document.getElementById("model-menu-close");
   const modelTriggerTitle = document.getElementById("model-trigger-title");
   const modelTriggerSubtitle = document.getElementById("model-trigger-subtitle");
   const modelMessage = document.getElementById("model-message");
+
+  function isMobileModelSheet() {
+    return window.matchMedia("(max-width: 640px)").matches;
+  }
 
   function setToggleState(button, on) {
     button.classList.toggle("is-on", on);
@@ -434,18 +503,28 @@
     if (!modelSelect || !modelTrigger || !modelMenu) {
       return;
     }
+    document.body.classList.remove("model-sheet-open");
     modelSelect.classList.remove("is-open");
     modelTrigger.setAttribute("aria-expanded", "false");
     modelMenu.hidden = true;
+    if (modelBackdrop) {
+      modelBackdrop.hidden = true;
+    }
   }
 
   function openModelMenu() {
     if (!modelSelect || !modelTrigger || !modelMenu) {
       return;
     }
+    if (isMobileModelSheet()) {
+      document.body.classList.add("model-sheet-open");
+    }
     modelSelect.classList.add("is-open");
     modelTrigger.setAttribute("aria-expanded", "true");
     modelMenu.hidden = false;
+    if (modelBackdrop) {
+      modelBackdrop.hidden = false;
+    }
   }
 
   async function refreshPushState() {
@@ -592,10 +671,25 @@
       if (!modelSelect || modelMenu.hidden) {
         return;
       }
+      if (isMobileModelSheet()) {
+        return;
+      }
       if (!modelSelect.contains(event.target)) {
         closeModelMenu();
       }
     });
+
+    if (modelBackdrop) {
+      modelBackdrop.addEventListener("click", () => {
+        closeModelMenu();
+      });
+    }
+
+    if (modelMenuClose) {
+      modelMenuClose.addEventListener("click", () => {
+        closeModelMenu();
+      });
+    }
 
     document.querySelectorAll("[data-model-option]").forEach((button) => {
       button.addEventListener("click", async () => {
