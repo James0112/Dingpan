@@ -96,18 +96,31 @@ function bindThemeToggle() {
 }
 
 function bindViewportKeyboardBehavior() {
+  const root = document.documentElement;
+
+  const updateViewportState = () => {
+    if (!window.visualViewport) {
+      root.style.setProperty("--viewport-bottom-offset", "0px");
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    const keyboardOpen = viewport.height < window.innerHeight * 0.75;
+    document.body.classList.toggle("keyboard-open", keyboardOpen);
+
+    const viewportBottomOffset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    root.style.setProperty("--viewport-bottom-offset", `${viewportBottomOffset}px`);
+  };
+
   if (!window.visualViewport) {
+    updateViewportState();
     return;
   }
 
-  const updateKeyboardState = () => {
-    const keyboardOpen = window.visualViewport.height < window.innerHeight * 0.75;
-    document.body.classList.toggle("keyboard-open", keyboardOpen);
-  };
-
-  window.visualViewport.addEventListener("resize", updateKeyboardState);
-  window.visualViewport.addEventListener("scroll", updateKeyboardState);
-  updateKeyboardState();
+  window.visualViewport.addEventListener("resize", updateViewportState);
+  window.visualViewport.addEventListener("scroll", updateViewportState);
+  window.addEventListener("resize", updateViewportState);
+  updateViewportState();
 }
 
 function ensureInstallBanner() {
