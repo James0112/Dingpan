@@ -108,7 +108,9 @@ function bindViewportKeyboardBehavior() {
     const keyboardOpen = viewport.height < window.innerHeight * 0.75;
     document.body.classList.toggle("keyboard-open", keyboardOpen);
 
-    const viewportBottomOffset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    const viewportBottomOffset = keyboardOpen
+      ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+      : 0;
     root.style.setProperty("--viewport-bottom-offset", `${viewportBottomOffset}px`);
   };
 
