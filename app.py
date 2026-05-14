@@ -95,6 +95,10 @@ class EmailPreferencesPayload(BaseModel):
     daily_email_enabled: bool
 
 
+class ModelPreferencePayload(BaseModel):
+    preferred_model: str = Field(min_length=1, max_length=32)
+
+
 class SubscriptionCreatePayload(BaseModel):
     stock_code: str = Field(min_length=1, max_length=16)
     stock_name: str = Field(default="", max_length=64)
@@ -878,6 +882,33 @@ async def update_email_preferences(payload: EmailPreferencesPayload, user=Depend
     if payload.daily_email_enabled and not user.email_verified_at:
         return {"ok": True, "message": "请先验证邮箱，验证后才能开启每日报告邮件。", "daily_email_enabled": False}
     return {"ok": True, "message": "每日报告邮件设置已更新。", "daily_email_enabled": payload.daily_email_enabled}
+
+
+@app.post("/api/user/preferences/model")
+async def update_model_preference(payload: ModelPreferencePayload, user=Depends(current_user)):
+    model_id = payload.preferred_model.strip()
+    row = await fetch_one(
+        settings.db_path,
+        """
+        SELECT model_id, display_name
+        FROM model_pricing
+        WHERE model_id = ? AND is_active = 1
+        """,
+        (model_id,),
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected model is not available")
+    await execute(
+        settings.db_path,
+        "UPDATE users SET preferred_model = ? WHERE id = ?",
+        (model_id, user.id),
+    )
+    return {
+        "ok": True,
+        "message": "默认模型已更新。",
+        "preferred_model": str(row["model_id"]),
+        "display_name": str(row["display_name"]),
+    }
 
 
 @app.get("/api/admin/users")

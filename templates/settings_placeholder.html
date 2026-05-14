@@ -114,6 +114,103 @@
     line-height: 1.7;
     min-height: 20px;
   }
+  .model-select {
+    position: relative;
+  }
+  .model-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(59, 130, 246, 0.10), rgba(255, 255, 255, 0.92));
+    color: var(--text-primary);
+    text-align: left;
+    box-shadow: var(--shadow-soft);
+  }
+  [data-theme="dark"] .model-trigger {
+    background: linear-gradient(180deg, rgba(37, 99, 235, 0.22), rgba(42, 42, 42, 0.98));
+  }
+  .model-trigger-copy {
+    min-width: 0;
+  }
+  .model-trigger-title {
+    font-size: 17px;
+    font-weight: 800;
+  }
+  .model-trigger-subtitle {
+    margin-top: 6px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .model-trigger-caret {
+    flex: 0 0 auto;
+    color: var(--text-secondary);
+    font-size: 18px;
+    transition: transform 160ms ease;
+  }
+  .model-select.is-open .model-trigger-caret {
+    transform: rotate(180deg);
+  }
+  .model-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-soft);
+  }
+  .model-menu[hidden] {
+    display: none;
+  }
+  .model-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid transparent;
+    border-radius: 16px;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    text-align: left;
+  }
+  .model-option-copy {
+    min-width: 0;
+  }
+  .model-option-title {
+    font-size: 15px;
+    font-weight: 800;
+  }
+  .model-option-subtitle {
+    margin-top: 5px;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .model-option.is-active {
+    border-color: rgba(59, 130, 246, 0.22);
+    background: rgba(59, 130, 246, 0.10);
+  }
+  .model-option-check {
+    flex: 0 0 auto;
+    color: var(--color-primary);
+    font-weight: 800;
+    opacity: 0;
+  }
+  .model-option.is-active .model-option-check {
+    opacity: 1;
+  }
   .password-form[hidden] {
     display: none;
   }
@@ -207,16 +304,41 @@
   <section class="settings-section">
     <p class="settings-header">模型</p>
     <article class="settings-item">
-      <div class="settings-item-title">当前默认模型</div>
-      <div class="settings-item-copy">{{ user.preferred_model }} · 当前阶段只读展示，后续再开放切换。</div>
-      <div class="list">
-        {% for model in models %}
-        <div class="stock-card">
-          <div style="font-size:16px;font-weight:700;">{{ model.display_name }}</div>
-          <div class="muted" style="margin-top:6px;">{{ model.model_id }} · {{ model.points_per_call }} 点/次</div>
+      <div class="settings-item-title">默认分析模型</div>
+      <div class="settings-item-copy">默认使用当前模型，需要时可展开切换到其它可选模型。</div>
+      <div class="model-select" id="model-select">
+        <button class="model-trigger" type="button" id="model-trigger" aria-expanded="false" aria-haspopup="listbox">
+          <div class="model-trigger-copy">
+            <div class="model-trigger-title" id="model-trigger-title">
+              {% for model in models %}{% if model.model_id == user.preferred_model %}{{ model.display_name }}{% endif %}{% endfor %}
+            </div>
+            <div class="model-trigger-subtitle" id="model-trigger-subtitle">
+              {{ user.preferred_model }} · 当前默认模型
+            </div>
+          </div>
+          <span class="model-trigger-caret" aria-hidden="true">⌄</span>
+        </button>
+        <div class="model-menu" id="model-menu" role="listbox" hidden>
+          {% for model in models %}
+          <button
+            class="model-option{% if model.model_id == user.preferred_model %} is-active{% endif %}"
+            type="button"
+            data-model-option
+            data-model-id="{{ model.model_id }}"
+            data-model-name="{{ model.display_name }}"
+            role="option"
+            aria-selected="{% if model.model_id == user.preferred_model %}true{% else %}false{% endif %}"
+          >
+            <div class="model-option-copy">
+              <div class="model-option-title">{{ model.display_name }}</div>
+              <div class="model-option-subtitle">{{ model.model_id }} · {{ model.points_per_call }} 点/次</div>
+            </div>
+            <span class="model-option-check" aria-hidden="true">✓</span>
+          </button>
+          {% endfor %}
         </div>
-        {% endfor %}
       </div>
+      <div class="settings-meta" id="model-message">当前默认模型会用于新增订阅时的默认选择。</div>
     </article>
   </section>
 
@@ -288,6 +410,12 @@
   const passwordMessage = document.getElementById("password-message");
   const logoutButton = document.getElementById("logout-button");
   const themeMessage = document.getElementById("theme-message");
+  const modelSelect = document.getElementById("model-select");
+  const modelTrigger = document.getElementById("model-trigger");
+  const modelMenu = document.getElementById("model-menu");
+  const modelTriggerTitle = document.getElementById("model-trigger-title");
+  const modelTriggerSubtitle = document.getElementById("model-trigger-subtitle");
+  const modelMessage = document.getElementById("model-message");
 
   function setToggleState(button, on) {
     button.classList.toggle("is-on", on);
@@ -300,6 +428,24 @@
       button.classList.toggle("active", button.dataset.themeChoiceButton === current);
     });
     themeMessage.textContent = current === "system" ? "当前跟随系统主题。" : `当前使用${current === "light" ? "浅色" : "深色"}主题。`;
+  }
+
+  function closeModelMenu() {
+    if (!modelSelect || !modelTrigger || !modelMenu) {
+      return;
+    }
+    modelSelect.classList.remove("is-open");
+    modelTrigger.setAttribute("aria-expanded", "false");
+    modelMenu.hidden = true;
+  }
+
+  function openModelMenu() {
+    if (!modelSelect || !modelTrigger || !modelMenu) {
+      return;
+    }
+    modelSelect.classList.add("is-open");
+    modelTrigger.setAttribute("aria-expanded", "true");
+    modelMenu.hidden = false;
   }
 
   async function refreshPushState() {
@@ -432,6 +578,65 @@
       updateThemeChoiceButtons();
     });
   });
+
+  if (modelTrigger && modelMenu) {
+    modelTrigger.addEventListener("click", () => {
+      if (modelMenu.hidden) {
+        openModelMenu();
+      } else {
+        closeModelMenu();
+      }
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!modelSelect || modelMenu.hidden) {
+        return;
+      }
+      if (!modelSelect.contains(event.target)) {
+        closeModelMenu();
+      }
+    });
+
+    document.querySelectorAll("[data-model-option]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const nextModelId = button.dataset.modelId || "";
+        const nextModelName = button.dataset.modelName || nextModelId;
+        if (!nextModelId) {
+          return;
+        }
+        document.querySelectorAll("[data-model-option]").forEach((item) => {
+          item.disabled = true;
+        });
+        modelMessage.textContent = "正在更新默认模型...";
+        try {
+          const response = await fetch("/api/user/preferences/model", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ preferred_model: nextModelId })
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(data.detail || "更新失败");
+          }
+          modelTriggerTitle.textContent = data.display_name || nextModelName;
+          modelTriggerSubtitle.textContent = `${data.preferred_model || nextModelId} · 当前默认模型`;
+          document.querySelectorAll("[data-model-option]").forEach((item) => {
+            const active = item.dataset.modelId === (data.preferred_model || nextModelId);
+            item.classList.toggle("is-active", active);
+            item.setAttribute("aria-selected", active ? "true" : "false");
+          });
+          modelMessage.textContent = data.message || "默认模型已更新。";
+          closeModelMenu();
+        } catch (error) {
+          modelMessage.textContent = error.message || "更新失败";
+        } finally {
+          document.querySelectorAll("[data-model-option]").forEach((item) => {
+            item.disabled = false;
+          });
+        }
+      });
+    });
+  }
 
   if (passwordToggleButton && changePasswordForm) {
     passwordToggleButton.addEventListener("click", () => {
