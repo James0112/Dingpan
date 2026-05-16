@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+import sqlite3
 import subprocess
 from typing import Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -25,6 +26,9 @@ from src.auth import (
 )
 from src.config import load_settings
 from src.database import connect, execute, fetch_all, fetch_one, init_db
+from src.fetch_data import DataFetchError, fetch_market_data
+from src.fetch_news import fetch_news
+from src.analyze import AnalysisError, analyze_market_data
 from src.mailer import MailerError, render_template, send_resend_email
 from src.push import (
     PushError,
@@ -35,10 +39,23 @@ from src.push import (
     upsert_push_subscription,
 )
 from src.render_report import (
+    ANALYSIS_VERSION,
+    analysis_result_to_json,
     analysis_result_from_json,
     build_report_context,
+    market_data_to_json,
     market_data_from_json,
+    news_list_to_json,
     news_list_from_json,
+)
+from src.trading_calendar import (
+    TradingCalendarError,
+    fallback_latest_trade_date,
+    get_latest_trade_date,
+    get_today,
+    is_calendar_stale,
+    is_today_trading_day,
+    load_trade_calendar,
 )
 
 
@@ -104,12 +121,10 @@ class SubscriptionCreatePayload(BaseModel):
     stock_code: str = Field(min_length=1, max_length=16)
     stock_name: str = Field(default="", max_length=64)
     cost_price: float = 0.0
-    model_id: str = Field(default="gemini", max_length=32)
 
 
 class SubscriptionUpdatePayload(BaseModel):
     cost_price: Optional[float] = None
-    model_id: Optional[str] = Field(default=None, max_length=32)
     sort_order: Optional[int] = None
     is_active: Optional[bool] = None
 
@@ -235,6 +250,203 @@ async def _fetch_runnable_model(model_id: str):
     if row is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected model is not available")
     return row
+
+
+def _resolve_generation_trade_date() -> date:
+    today = get_today(settings.timezone_name)
+    try:
+        trade_dates = load_trade_calendar()
+        if is_calendar_stale(today, trade_dates):
+            raise TradingCalendarError("Trade calendar is stale")
+        if not is_today_trading_day(today, trade_dates):
+            return get_latest_trade_date(today, trade_dates)
+        return get_latest_trade_date(today, trade_dates)
+    except TradingCalendarError:
+        return fallback_latest_trade_date(today)
+
+
+def _upsert_analysis_cache_sync(
+    *,
+    stock_code: str,
+    stock_name: str,
+    trade_date_value: date,
+    model_id: str,
+    status_value: str,
+    error_message: str,
+    market_data_json: str,
+    analysis_json: str,
+    news_json: str,
+    actual_provider: str,
+    actual_model_name: str,
+    provider_response_id: str,
+) -> None:
+    conn = sqlite3.connect(settings.db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO analysis_cache (
+                stock_code, stock_name, trade_date, model_id, analysis_version,
+                status, error_message, market_data_json, analysis_json, news_json,
+                actual_provider, actual_model_name, provider_response_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(stock_code, trade_date, model_id) DO UPDATE SET
+                stock_name=excluded.stock_name,
+                analysis_version=excluded.analysis_version,
+                status=excluded.status,
+                error_message=excluded.error_message,
+                market_data_json=excluded.market_data_json,
+                analysis_json=excluded.analysis_json,
+                news_json=excluded.news_json,
+                actual_provider=excluded.actual_provider,
+                actual_model_name=excluded.actual_model_name,
+                provider_response_id=excluded.provider_response_id,
+                created_at=CURRENT_TIMESTAMP
+            """,
+            (
+                stock_code,
+                stock_name,
+                trade_date_value.isoformat(),
+                model_id,
+                ANALYSIS_VERSION,
+                status_value,
+                error_message,
+                market_data_json,
+                analysis_json,
+                news_json,
+                actual_provider,
+                actual_model_name,
+                provider_response_id,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _generate_shared_analysis_for_user_sync(user_id: int, model_id: str) -> None:
+    trade_date_value = _resolve_generation_trade_date()
+    conn = sqlite3.connect(settings.db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT stock_code, stock_name
+            FROM subscriptions
+            WHERE user_id = ? AND is_active = 1 AND model_id = ?
+            ORDER BY stock_code ASC
+            """,
+            (user_id, model_id),
+        ).fetchall()
+    finally:
+        conn.close()
+
+    for row in rows:
+        stock_code = str(row["stock_code"])
+        stock_name = str(row["stock_name"] or stock_code)
+        try:
+            market_data = fetch_market_data(
+                stock_code=stock_code,
+                stock_name=stock_name,
+                cost_price=0.0,
+                latest_trade_date=trade_date_value,
+            )
+            news_list = fetch_news(
+                stock_code=stock_code,
+                latest_trade_date=market_data.latest_trade_date,
+                lookback_hours=settings.news_lookback_hours,
+                max_items=settings.max_news_items,
+            )
+            analyze_output = analyze_market_data(
+                model_id,
+                market_data,
+                news_list,
+                db_path=settings.db_path,
+                settings=settings,
+            )
+            _upsert_analysis_cache_sync(
+                stock_code=stock_code,
+                stock_name=market_data.stock_name,
+                trade_date_value=market_data.latest_trade_date,
+                model_id=model_id,
+                status_value="success",
+                error_message="",
+                market_data_json=market_data_to_json(market_data),
+                analysis_json=analysis_result_to_json(analyze_output.analysis),
+                news_json=news_list_to_json(news_list),
+                actual_provider=analyze_output.actual_provider,
+                actual_model_name=analyze_output.actual_model_name,
+                provider_response_id=analyze_output.provider_response_id,
+            )
+        except (DataFetchError, AnalysisError, ValueError) as exc:
+            _upsert_analysis_cache_sync(
+                stock_code=stock_code,
+                stock_name=stock_name,
+                trade_date_value=trade_date_value,
+                model_id=model_id,
+                status_value="failed",
+                error_message=str(exc),
+                market_data_json="{}",
+                analysis_json="{}",
+                news_json="[]",
+                actual_provider="",
+                actual_model_name="",
+                provider_response_id="",
+            )
+
+
+async def _model_generation_status(user_id: int, model_id: str) -> dict[str, object]:
+    trade_date_value = _resolve_generation_trade_date().isoformat()
+    targets = await fetch_all(
+        settings.db_path,
+        """
+        SELECT stock_code
+        FROM subscriptions
+        WHERE user_id = ? AND is_active = 1 AND model_id = ?
+        ORDER BY stock_code ASC
+        """,
+        (user_id, model_id),
+    )
+    if not targets:
+        return {"state": "ready", "trade_date": trade_date_value, "total": 0, "ready": 0, "failed": 0, "missing": 0}
+
+    ready_count = 0
+    failed_count = 0
+    missing_count = 0
+    for row in targets:
+        cache_row = await fetch_one(
+            settings.db_path,
+            """
+            SELECT status
+            FROM analysis_cache
+            WHERE stock_code = ? AND trade_date = ? AND model_id = ?
+            LIMIT 1
+            """,
+            (str(row["stock_code"]), trade_date_value, model_id),
+        )
+        if cache_row is None:
+            missing_count += 1
+            continue
+        if str(cache_row["status"]) == "success":
+            ready_count += 1
+        elif str(cache_row["status"]) == "failed":
+            failed_count += 1
+        else:
+            missing_count += 1
+
+    state = "ready"
+    if missing_count > 0:
+        state = "generating"
+    elif failed_count > 0:
+        state = "failed"
+    return {
+        "state": state,
+        "trade_date": trade_date_value,
+        "total": len(targets),
+        "ready": ready_count,
+        "failed": failed_count,
+        "missing": missing_count,
+    }
 
 
 async def _email_send_allowed(user_id: int, token_type: str, *, cooldown_seconds: int = EMAIL_RESEND_INTERVAL_SECONDS) -> bool:
@@ -509,6 +721,7 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
             s.stock_name,
             s.cost_price,
             s.model_id,
+            mp.display_name AS model_display_name,
             s.is_active,
             s.sort_order,
             s.created_at,
@@ -517,6 +730,8 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
             ac.analysis_json,
             ac.status AS cache_status
         FROM subscriptions s
+        LEFT JOIN model_pricing mp
+            ON mp.model_id = s.model_id
         LEFT JOIN analysis_cache ac
             ON ac.stock_code = s.stock_code
             AND ac.model_id = s.model_id
@@ -932,7 +1147,11 @@ async def update_email_preferences(payload: EmailPreferencesPayload, user=Depend
 
 
 @app.post("/api/user/preferences/model")
-async def update_model_preference(payload: ModelPreferencePayload, user=Depends(current_user)):
+async def update_model_preference(
+    payload: ModelPreferencePayload,
+    background_tasks: BackgroundTasks,
+    user=Depends(current_user),
+):
     model_id = payload.preferred_model.strip()
     row = await _fetch_runnable_model(model_id)
     await execute(
@@ -940,12 +1159,26 @@ async def update_model_preference(payload: ModelPreferencePayload, user=Depends(
         "UPDATE users SET preferred_model = ? WHERE id = ?",
         (model_id, user.id),
     )
+    await execute(
+        settings.db_path,
+        "UPDATE subscriptions SET model_id = ? WHERE user_id = ?",
+        (model_id, user.id),
+    )
+    background_tasks.add_task(_generate_shared_analysis_for_user_sync, user.id, model_id)
+    status_payload = await _model_generation_status(user.id, model_id)
     return {
         "ok": True,
-        "message": "默认模型已更新。",
+        "message": "分析模型已更新，正在生成对应报告。",
         "preferred_model": str(row["model_id"]),
         "display_name": str(row["display_name"]),
+        "generation_status": status_payload,
     }
+
+
+@app.get("/api/user/preferences/model/status")
+async def model_preference_status(user=Depends(current_user)):
+    status_payload = await _model_generation_status(user.id, user.preferred_model)
+    return {"ok": True, "preferred_model": user.preferred_model, **status_payload}
 
 
 @app.get("/api/admin/users")
@@ -1075,7 +1308,7 @@ async def list_subscriptions(user=Depends(verified_user)):
 async def create_subscription(payload: SubscriptionCreatePayload, user=Depends(verified_user)):
     stock_code = _normalize_stock_code(payload.stock_code)
     stock_name = payload.stock_name.strip() or stock_code
-    await _fetch_runnable_model(payload.model_id)
+    await _fetch_runnable_model(user.preferred_model)
     try:
         subscription_id = await execute(
             settings.db_path,
@@ -1083,7 +1316,7 @@ async def create_subscription(payload: SubscriptionCreatePayload, user=Depends(v
             INSERT INTO subscriptions (user_id, stock_code, stock_name, cost_price, model_id)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (user.id, stock_code, stock_name, payload.cost_price, payload.model_id),
+            (user.id, stock_code, stock_name, payload.cost_price, user.preferred_model),
         )
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Failed to create subscription: {exc}") from exc
@@ -1100,18 +1333,16 @@ async def update_subscription(subscription_id: int, payload: SubscriptionUpdateP
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
     next_cost_price = payload.cost_price if payload.cost_price is not None else float(row["cost_price"])
-    next_model_id = payload.model_id if payload.model_id is not None else str(row["model_id"])
     next_sort_order = payload.sort_order if payload.sort_order is not None else int(row["sort_order"])
     next_is_active = int(payload.is_active) if payload.is_active is not None else int(row["is_active"])
-    await _fetch_runnable_model(next_model_id)
     await execute(
         settings.db_path,
         """
         UPDATE subscriptions
-        SET cost_price = ?, model_id = ?, sort_order = ?, is_active = ?
+        SET cost_price = ?, sort_order = ?, is_active = ?
         WHERE id = ? AND user_id = ?
         """,
-        (next_cost_price, next_model_id, next_sort_order, next_is_active, subscription_id, user.id),
+        (next_cost_price, next_sort_order, next_is_active, subscription_id, user.id),
     )
     return {"ok": True}
 

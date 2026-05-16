@@ -397,8 +397,8 @@
   <section class="settings-section">
     <p class="settings-header">模型</p>
     <article class="settings-item">
-      <div class="settings-item-title">默认分析模型</div>
-      <div class="settings-item-copy">默认使用当前模型，需要时可展开切换到其它可选模型。</div>
+      <div class="settings-item-title">分析模型</div>
+      <div class="settings-item-copy">这里是唯一的模型切换入口。切换后，系统会为您现有订阅重新生成对应模型的报告。新注册用户默认使用 Gemini 3 Flash Preview。</div>
       <div class="model-select" id="model-select">
         <div class="model-backdrop" id="model-backdrop" hidden></div>
         <button class="model-trigger" type="button" id="model-trigger" aria-expanded="false" aria-haspopup="listbox">
@@ -407,14 +407,14 @@
               {% for model in models %}{% if model.model_id == user.preferred_model %}{{ model.display_name }}{% endif %}{% endfor %}
             </div>
             <div class="model-trigger-subtitle" id="model-trigger-subtitle">
-              {{ user.preferred_model }} · 当前默认模型
+              {{ user.preferred_model }} · 当前分析模型
             </div>
           </div>
           <span class="model-trigger-caret" aria-hidden="true">⌄</span>
         </button>
         <div class="model-menu" id="model-menu" role="listbox" hidden>
           <div class="model-menu-header">
-            <div class="model-menu-title">选择默认模型</div>
+            <div class="model-menu-title">选择分析模型</div>
             <button class="secondary model-menu-close" type="button" id="model-menu-close">关闭</button>
           </div>
           <div class="model-menu-list">
@@ -438,7 +438,7 @@
           </div>
         </div>
       </div>
-      <div class="settings-meta" id="model-message">当前默认模型会用于新增订阅时的默认选择。</div>
+      <div class="settings-meta" id="model-message">切换模型后，相关报告会自动重新生成。</div>
     </article>
   </section>
 
@@ -739,7 +739,7 @@
         document.querySelectorAll("[data-model-option]").forEach((item) => {
           item.disabled = true;
         });
-        modelMessage.textContent = "正在更新默认模型...";
+        modelMessage.textContent = "正在切换分析模型并生成对应报告...";
         try {
           const response = await fetch("/api/user/preferences/model", {
             method: "POST",
@@ -751,13 +751,13 @@
             throw new Error(data.detail || "更新失败");
           }
           modelTriggerTitle.textContent = data.display_name || nextModelName;
-          modelTriggerSubtitle.textContent = `${data.preferred_model || nextModelId} · 当前默认模型`;
+          modelTriggerSubtitle.textContent = `${data.preferred_model || nextModelId} · 当前分析模型`;
           document.querySelectorAll("[data-model-option]").forEach((item) => {
             const active = item.dataset.modelId === (data.preferred_model || nextModelId);
             item.classList.toggle("is-active", active);
             item.setAttribute("aria-selected", active ? "true" : "false");
           });
-          modelMessage.textContent = data.message || "默认模型已更新。";
+          await pollModelGenerationStatus();
           closeModelMenu();
         } catch (error) {
           modelMessage.textContent = error.message || "更新失败";
@@ -768,6 +768,29 @@
         }
       });
     });
+  }
+
+  async function pollModelGenerationStatus() {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 180000) {
+      const response = await fetch("/api/user/preferences/model/status");
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        modelMessage.textContent = data.detail || "读取模型生成状态失败";
+        return;
+      }
+      if (data.state === "ready") {
+        modelMessage.textContent = "分析模型已切换完成，相关报告已生成。";
+        return;
+      }
+      if (data.state === "failed") {
+        modelMessage.textContent = "分析模型已切换，但部分报告生成失败，请稍后刷新查看。";
+        return;
+      }
+      modelMessage.textContent = `正在生成报告，请稍候...（${data.ready || 0}/${data.total || 0}）`;
+      await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    }
+    modelMessage.textContent = "报告仍在生成中，请稍后刷新查看。";
   }
 
   if (passwordToggleButton && changePasswordForm) {

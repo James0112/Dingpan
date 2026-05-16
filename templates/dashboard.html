@@ -2,12 +2,6 @@
 
 {% block content %}
 {% set is_verified = user.email_verified_at %}
-{% set current_model = models[0] if models else none %}
-{% for model in models %}
-  {% if model.model_id == user.preferred_model %}
-    {% set current_model = model %}
-  {% endif %}
-{% endfor %}
 {% macro subscription_form(form_id, compact=False) %}
 <form class="subscription-form stack" id="{{ form_id }}">
   <div class="field">
@@ -26,16 +20,6 @@
         <label for="{{ form_id }}-stock_name">股票名称</label>
         <input id="{{ form_id }}-stock_name" name="stock_name" placeholder="可留空，后续自动解析" {% if not is_verified %}disabled{% endif %}>
       </div>
-      <div class="field">
-        <label for="{{ form_id }}-model_id">分析模型</label>
-        <select id="{{ form_id }}-model_id" name="model_id" {% if not is_verified %}disabled{% endif %}>
-          {% for model in models %}
-          <option value="{{ model.model_id }}" {% if current_model and current_model.model_id == model.model_id %}selected{% endif %}>
-            {{ model.display_name }} · {{ model.points_per_call }}点/次
-          </option>
-          {% endfor %}
-        </select>
-      </div>
     </div>
   </details>
   {% else %}
@@ -43,17 +27,8 @@
     <label for="{{ form_id }}-stock_name">股票名称</label>
     <input id="{{ form_id }}-stock_name" name="stock_name" placeholder="可留空，后续自动解析" {% if not is_verified %}disabled{% endif %}>
   </div>
-  <div class="field">
-    <label for="{{ form_id }}-model_id">分析模型</label>
-    <select id="{{ form_id }}-model_id" name="model_id" {% if not is_verified %}disabled{% endif %}>
-      {% for model in models %}
-      <option value="{{ model.model_id }}" {% if current_model and current_model.model_id == model.model_id %}selected{% endif %}>
-        {{ model.display_name }} · {{ model.points_per_call }}点/次
-      </option>
-      {% endfor %}
-    </select>
-  </div>
   {% endif %}
+  <div class="inline-note">分析模型统一在“设置”页修改，新增股票会自动使用当前分析模型。</div>
   <div class="message" data-form-message></div>
   <button type="submit" {% if not is_verified %}disabled{% endif %}>添加订阅</button>
 </form>
@@ -334,7 +309,7 @@
             <div class="stock-headline">
               <div>
                 <div class="stock-title">{{ item.stock_name or item.stock_code }}</div>
-                <div class="muted" style="margin-top:4px;">{{ item.stock_code }} · {{ item.model_id }}</div>
+                <div class="muted" style="margin-top:4px;">{{ item.stock_code }} · {{ item.model_display_name or item.model_id }}</div>
               </div>
               <button class="secondary delete-button" data-id="{{ item.id }}" type="button" {% if not is_verified %}disabled{% endif %}>删除</button>
             </div>
@@ -491,8 +466,7 @@
     const payload = {
       stock_code: form.stock_code.value.trim(),
       stock_name: form.stock_name.value.trim(),
-      cost_price: Number(form.cost_price.value || 0),
-      model_id: form.model_id ? form.model_id.value : "{{ current_model.model_id if current_model else 'gemini' }}"
+      cost_price: Number(form.cost_price.value || 0)
     };
     const response = await fetch("/api/subscriptions", {
       method: "POST",
