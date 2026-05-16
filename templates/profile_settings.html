@@ -390,7 +390,7 @@
       });
     }
 
-    document.querySelectorAll("[data-choice-option]", choice).forEach((option) => {
+    choice.querySelectorAll("[data-choice-option]").forEach((option) => {
       option.addEventListener("click", () => {
         const nextValue = option.dataset.value || "";
         const nextLabel = option.dataset.label || "未设置";
@@ -400,7 +400,7 @@
         if (valueLabel) {
           valueLabel.textContent = nextLabel;
         }
-        document.querySelectorAll("[data-choice-option]", choice).forEach((item) => {
+        choice.querySelectorAll("[data-choice-option]").forEach((item) => {
           item.classList.toggle("is-active", item === option);
         });
         closeChoice(choice);
