@@ -66,11 +66,13 @@
     align-items: flex-start;
   }
   .chat-thread {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 12px;
-    align-content: start;
+    align-items: stretch;
   }
   .chat-bubble {
+    width: fit-content;
     max-width: min(100%, 780px);
     padding: 14px 16px;
     border-radius: 18px;
@@ -80,9 +82,12 @@
     line-height: 1.75;
   }
   .chat-bubble.user {
-    margin-left: auto;
+    align-self: flex-end;
     background: rgba(59, 130, 246, 0.10);
     border-color: rgba(59, 130, 246, 0.22);
+  }
+  .chat-bubble.assistant {
+    align-self: flex-start;
   }
   .chat-bubble-meta {
     margin-top: 8px;
@@ -107,6 +112,12 @@
     .chat-layout {
       grid-template-columns: 1fr;
     }
+    .chat-main {
+      min-height: 0;
+    }
+    .chat-bubble {
+      max-width: 92%;
+    }
   }
 </style>
 
@@ -128,7 +139,7 @@
             <option value="{{ item.stock_code }}">{{ item.stock_name or item.stock_code }} · {{ item.stock_code }}</option>
             {% endfor %}
           </select>
-          <button class="button secondary" type="button" id="new-stock-chat">进入</button>
+          <button class="button secondary" type="button" id="new-stock-chat" disabled>进入</button>
         </div>
       </div>
       <div class="message" id="chat-page-message"></div>
@@ -229,6 +240,11 @@
   }
 
   if (newStockChatButton) {
+    const syncStockChatButton = () => {
+      newStockChatButton.disabled = !newStockChatSelect.value;
+    };
+    syncStockChatButton();
+    newStockChatSelect.addEventListener("change", syncStockChatButton);
     newStockChatButton.addEventListener("click", () => {
       if (!newStockChatSelect.value) {
         chatPageMessage.textContent = "先选择一只股票";

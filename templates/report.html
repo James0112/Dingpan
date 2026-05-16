@@ -244,11 +244,14 @@
       <h1 style="margin:0;">{{ market_data.stock_name }} {{ market_data.stock_code }}</h1>
       <div class="muted" style="margin-top:6px;">{{ market_data.latest_trade_date }} · {{ model_id }}</div>
     </div>
-    <div class="report-price">
-      <strong>¥{{ '%.2f'|format(market_data.snapshot.close_price) }}</strong>
-      <div class="{% if market_data.snapshot.change_pct > 0 %}trend-up{% elif market_data.snapshot.change_pct < 0 %}trend-down{% else %}trend-flat{% endif %}" style="font-size:16px;font-weight:700;">
-        {% if market_data.snapshot.change_pct > 0 %}▲{% elif market_data.snapshot.change_pct < 0 %}▼{% else %}━{% endif %}
-        {{ '%+.2f'|format(market_data.snapshot.change_pct) }}%
+    <div class="row" style="justify-content:flex-end;align-items:flex-start;">
+      <button class="button secondary" type="button" id="open-stock-chat-button">进入股票对话</button>
+      <div class="report-price">
+        <strong>¥{{ '%.2f'|format(market_data.snapshot.close_price) }}</strong>
+        <div class="{% if market_data.snapshot.change_pct > 0 %}trend-up{% elif market_data.snapshot.change_pct < 0 %}trend-down{% else %}trend-flat{% endif %}" style="font-size:16px;font-weight:700;">
+          {% if market_data.snapshot.change_pct > 0 %}▲{% elif market_data.snapshot.change_pct < 0 %}▼{% else %}━{% endif %}
+          {{ '%+.2f'|format(market_data.snapshot.change_pct) }}%
+        </div>
       </div>
     </div>
   </div>
@@ -433,6 +436,7 @@
   const personalizedStatusPanel = document.getElementById("personalized-status-panel");
   const personalizedStatusCopy = document.getElementById("personalized-status-copy");
   const personalizedRetryButton = document.getElementById("personalized-retry-button");
+  const openStockChatButton = document.getElementById("open-stock-chat-button");
   if (reportBackbar && reportTopbar) {
     const syncBackbarState = () => {
       const topbarBottom = reportTopbar.getBoundingClientRect().bottom;
@@ -498,6 +502,31 @@
       personalizedStatusPanel.dataset.personalizedState = "generating";
       personalizedStatusCopy.textContent = data.message || "正在重新生成个性化建议。";
       void pollPersonalizedStatus();
+    });
+  }
+
+  if (openStockChatButton) {
+    openStockChatButton.addEventListener("click", async () => {
+      openStockChatButton.disabled = true;
+      openStockChatButton.textContent = "进入中...";
+      const response = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversation_type: "stock",
+          stock_code: "{{ market_data.stock_code }}"
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        openStockChatButton.disabled = false;
+        openStockChatButton.textContent = data.detail || "进入失败";
+        window.setTimeout(() => {
+          openStockChatButton.textContent = "进入股票对话";
+        }, 1500);
+        return;
+      }
+      window.location.href = data.url;
     });
   }
 
