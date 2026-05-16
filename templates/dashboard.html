@@ -333,6 +333,7 @@
               {% endif %}
             </div>
             <p class="muted" style="margin:0;line-height:1.7;">{{ item.personalized_status_copy }}</p>
+            <p class="muted" style="margin:0;line-height:1.6;">{{ item.personalized_version_note }}</p>
             <p class="muted" style="margin:0;line-height:1.8;">{{ item.latest_summary }}</p>
             <div class="row" style="justify-content:space-between;align-items:center;">
               <div class="muted">最新报告：{{ item.latest_trade_date }}</div>
@@ -351,6 +352,7 @@
               {% endif %}
             </div>
             <p class="muted" style="margin:0;line-height:1.7;">{{ item.personalized_status_copy }}</p>
+            <p class="muted" style="margin:0;line-height:1.6;">{{ item.personalized_version_note }}</p>
             <div class="row" style="justify-content:flex-end;">
               <span class="pill">成本 ¥{{ '%.2f'|format(item.cost_price) }}</span>
             </div>

@@ -297,13 +297,22 @@
     <div class="report-status-note">
       当前画像：{{ profile.risk_preference or "未设风险偏好" }} · {{ profile.trading_style or "未设交易风格" }}{% if profile.focus_sectors %} · {{ profile.focus_sectors[:3]|join(" / ") }}{% endif %}
     </div>
+    <div class="report-status-note">
+      已应用画像版本：v{{ personalized_applied_context_version }} / 当前画像版本：v{{ profile.context_version }}
+    </div>
     {% elif personalized_state == "failed" %}
     <div class="report-status-note">
       可以先修改画像再重新生成；如果画像不需要调整，也可以直接点“重新生成”再试一次。
     </div>
+    <div class="report-status-note">
+      已应用画像版本：v{{ personalized_applied_context_version }} / 当前画像版本：v{{ profile.context_version }}
+    </div>
     {% else %}
     <div class="report-status-note">
       如果刚改过画像，这一轮会按最新 `context_version` 重新生成。
+    </div>
+    <div class="report-status-note">
+      已应用画像版本：v{{ personalized_applied_context_version }} / 当前画像版本：v{{ profile.context_version }}
     </div>
     {% endif %}
   </section>

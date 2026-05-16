@@ -638,6 +638,14 @@ def _personalized_dashboard_status(state: str) -> tuple[str, str]:
     return ("等待个性化生成", "已有共享分析，首次个性化建议会自动生成。")
 
 
+def _personalized_version_note(current_version: int, applied_version: int) -> str:
+    if applied_version <= 0:
+        return f"当前画像 v{current_version}，尚未应用到这份个性化建议。"
+    if applied_version == current_version:
+        return f"当前画像 v{current_version} 已应用。"
+    return f"当前画像 v{current_version}，这份建议仍停留在 v{applied_version}。"
+
+
 async def _load_personalized_analysis_state(
     *,
     user_id: int,
@@ -656,11 +664,11 @@ async def _load_personalized_analysis_state(
         (user_id, stock_code, trade_date, model_id),
     )
     if row is None:
-        return {"state": "missing", "result": None, "error_message": ""}
+        return {"state": "missing", "result": None, "error_message": "", "applied_context_version": 0}
 
     row_version = int(row["context_version"] or 0)
     if row_version != profile.context_version:
-        return {"state": "stale", "result": None, "error_message": ""}
+        return {"state": "stale", "result": None, "error_message": "", "applied_context_version": row_version}
 
     state = str(row["status"] or "pending")
     if state == "success" and str(row["result_json"] or "").strip():
@@ -668,10 +676,16 @@ async def _load_personalized_analysis_state(
             "state": "ready",
             "result": personalized_analysis_from_json(str(row["result_json"])),
             "error_message": "",
+            "applied_context_version": row_version,
         }
     if state == "failed":
-        return {"state": "failed", "result": None, "error_message": str(row["error_message"] or "")}
-    return {"state": "generating", "result": None, "error_message": ""}
+        return {
+            "state": "failed",
+            "result": None,
+            "error_message": str(row["error_message"] or ""),
+            "applied_context_version": row_version,
+        }
+    return {"state": "generating", "result": None, "error_message": "", "applied_context_version": row_version}
 
 
 async def _queue_personalized_generation(
@@ -1218,6 +1232,10 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
             item["personalized_status_label"] = status_label
             item["personalized_status_copy"] = status_copy
             item["profile_summary"] = profile_summary
+            item["personalized_version_note"] = _personalized_version_note(
+                profile.context_version,
+                int(personalized_state["applied_context_version"]),
+            )
             if float(row["cost_price"]) > 0:
                 item["latest_pnl_pct"] = ((market_data.snapshot.close_price - float(row["cost_price"])) / float(row["cost_price"])) * 100
             else:
@@ -1231,6 +1249,7 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
             item["personalized_status_label"] = "等待共享分析"
             item["personalized_status_copy"] = "共享分析生成后，这里会继续补个性化建议状态。"
             item["profile_summary"] = profile_summary
+            item["personalized_version_note"] = _personalized_version_note(profile.context_version, 0)
         subscriptions.append(item)
     models = await fetch_all(
         settings.db_path,
@@ -1417,7 +1436,12 @@ async def report_page(
             cost_price=float(subscription["cost_price"]),
             profile=profile,
         )
-        personalized_state = {"state": "generating", "result": None, "error_message": ""}
+        personalized_state = {
+            "state": "generating",
+            "result": None,
+            "error_message": "",
+            "applied_context_version": int(personalized_state["applied_context_version"]),
+        }
     context = build_report_context(
         market_data,
         analysis,
@@ -1437,6 +1461,7 @@ async def report_page(
             personalized=personalized_state["result"],
             personalized_state=str(personalized_state["state"]),
             personalized_error_message=str(personalized_state["error_message"]),
+            personalized_applied_context_version=int(personalized_state["applied_context_version"]),
             profile=profile,
             **context,
         ),
@@ -1795,6 +1820,7 @@ async def personalized_report_status(stock_code: str, trade_date: str, user=Depe
         "error_message": state_payload["error_message"],
         "report_url": f"/report/{stock_code}/{trade_date}",
         "context_version": profile.context_version,
+        "applied_context_version": int(state_payload["applied_context_version"]),
     }
 
 
