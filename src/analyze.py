@@ -1,13 +1,23 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 
 from src.providers import GenerateConfig, get_provider
+from src.config import Settings
 from src.schemas import AnalysisResult, MarketData, NewsItem
 
 
 class AnalysisError(RuntimeError):
     pass
+
+
+@dataclass(frozen=True)
+class AnalyzeOutput:
+    analysis: AnalysisResult
+    actual_provider: str
+    actual_model_name: str
+    provider_response_id: str
 
 
 def _build_prompt(market_data: MarketData, news_list: list[NewsItem]) -> str:
@@ -150,31 +160,28 @@ def _parse_response(raw_text: str, market_data: MarketData) -> AnalysisResult:
 
 
 def analyze_market_data(
-    api_key: str,
     model_id: str,
-    model_name: str,
     market_data: MarketData,
     news_list: list[NewsItem],
-    fallback_model_name: str | None = None,
-) -> AnalysisResult:
-    if not api_key:
-        raise AnalysisError("GEMINI_API_KEY is required")
-
+    *,
+    db_path: str,
+    settings: Settings,
+) -> AnalyzeOutput:
     prompt = _build_prompt(market_data, news_list)
-    provider = get_provider(
-        model_id,
-        api_key=api_key,
-        model_name=model_name,
-        fallback_model_name=fallback_model_name,
-    )
+    provider = get_provider(db_path, settings, model_id)
     last_error: AnalysisError | None = None
     for attempt in range(3):
         try:
-            raw_text = provider.generate(prompt, GenerateConfig())
+            provider_result = provider.generate(prompt, GenerateConfig())
         except Exception as exc:  # pragma: no cover - provider/runtime dependent
             raise AnalysisError(f"{model_id} analysis failed: {exc}") from exc
         try:
-            return _parse_response(raw_text, market_data)
+            return AnalyzeOutput(
+                analysis=_parse_response(provider_result.text, market_data),
+                actual_provider=provider_result.actual_provider,
+                actual_model_name=provider_result.actual_model_name,
+                provider_response_id=provider_result.provider_response_id,
+            )
         except AnalysisError as exc:
             last_error = exc
             if attempt == 2:

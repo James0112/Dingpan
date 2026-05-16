@@ -36,6 +36,9 @@ class Settings:
     output_dir: Path = OUTPUT_DIR
     template_path: Path = TEMPLATE_DIR / "email_template.html"
     gemini_api_key: str | None = None
+    openai_api_key: str | None = None
+    openai_base_url: str = "https://subapi.233clouds.com/v1"
+    openai_reasoning_effort: str = "xhigh"
     receiver_emails: tuple[str, ...] = ()
     resend_api_key: str | None = None
     mail_from_auth: str | None = None
@@ -108,6 +111,9 @@ def load_settings() -> Settings:
         output_dir=OUTPUT_DIR,
         template_path=TEMPLATE_DIR / "email_template.html",
         gemini_api_key=os.getenv("GEMINI_API_KEY"),
+        openai_api_key=os.getenv("OPENAI_API_KEY"),
+        openai_base_url=_env_or_default("OPENAI_BASE_URL", "https://subapi.233clouds.com/v1"),
+        openai_reasoning_effort=_env_or_default("OPENAI_REASONING_EFFORT", "xhigh"),
         receiver_emails=_parse_csv(os.getenv("RECEIVER_EMAIL")),
         resend_api_key=os.getenv("RESEND_API_KEY"),
         mail_from_auth=os.getenv("MAIL_FROM_AUTH"),

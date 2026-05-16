@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
-from datetime import datetime, timedelta, timezone
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 import subprocess
+from typing import Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.concurrency import run_in_threadpool
@@ -107,10 +108,10 @@ class SubscriptionCreatePayload(BaseModel):
 
 
 class SubscriptionUpdatePayload(BaseModel):
-    cost_price: float | None = None
-    model_id: str | None = Field(default=None, max_length=32)
-    sort_order: int | None = None
-    is_active: bool | None = None
+    cost_price: Optional[float] = None
+    model_id: Optional[str] = Field(default=None, max_length=32)
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
 
 
 class PushSubscribePayload(BaseModel):
@@ -119,9 +120,9 @@ class PushSubscribePayload(BaseModel):
 
 
 class AdminUserUpdatePayload(BaseModel):
-    is_active: bool | None = None
-    email_verified: bool | None = None
-    daily_email_enabled: bool | None = None
+    is_active: Optional[bool] = None
+    email_verified: Optional[bool] = None
+    daily_email_enabled: Optional[bool] = None
 
 
 def _normalize_stock_code(stock_code: str) -> str:
@@ -219,6 +220,21 @@ def _check_rate_limit(scope: str, key: str, *, max_attempts: int, window_seconds
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests, please try again later")
     timestamps.append(now)
     RATE_LIMIT_BUCKETS[bucket_key] = timestamps
+
+
+async def _fetch_runnable_model(model_id: str):
+    row = await fetch_one(
+        settings.db_path,
+        """
+        SELECT model_id, display_name, points_per_call
+        FROM model_pricing
+        WHERE model_id = ? AND is_active = 1 AND is_runnable = 1
+        """,
+        (model_id,),
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected model is not available")
+    return row
 
 
 async def _email_send_allowed(user_id: int, token_type: str, *, cooldown_seconds: int = EMAIL_RESEND_INTERVAL_SECONDS) -> bool:
@@ -542,7 +558,7 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
         """
         SELECT model_id, display_name, points_per_call
         FROM model_pricing
-        WHERE is_active = 1
+        WHERE is_active = 1 AND is_runnable = 1
         ORDER BY sort_order ASC, model_id ASC
         """,
     )
@@ -587,9 +603,9 @@ async def report_latest_page(request: Request, stock_code: str, user=Depends(pag
     latest_row = await fetch_one(
         settings.db_path,
         """
-        SELECT trade_date
+        SELECT trade_date, status
         FROM analysis_cache
-        WHERE stock_code = ? AND model_id = ? AND status = 'success'
+        WHERE stock_code = ? AND model_id = ?
         ORDER BY trade_date DESC
         LIMIT 1
         """,
@@ -604,6 +620,21 @@ async def report_latest_page(request: Request, stock_code: str, user=Depends(pag
                 "user": user,
                 "stock_code": stock_code,
                 "model_id": str(subscription["model_id"]),
+                "cache_status": "missing",
+                "trade_date": None,
+            },
+        )
+    if str(latest_row["status"]) == "failed":
+        return templates.TemplateResponse(
+            request,
+            "report_empty.html",
+            {
+                "title": "报告页",
+                "user": user,
+                "stock_code": stock_code,
+                "model_id": str(subscription["model_id"]),
+                "cache_status": "failed",
+                "trade_date": str(latest_row["trade_date"]),
             },
         )
     return RedirectResponse(url=f"/report/{stock_code}/{latest_row['trade_date']}", status_code=status.HTTP_302_FOUND)
@@ -630,9 +661,9 @@ async def report_page(request: Request, stock_code: str, trade_date: str, user=D
     cache_row = await fetch_one(
         settings.db_path,
         """
-        SELECT market_data_json, analysis_json, news_json, trade_date, model_id
+        SELECT market_data_json, analysis_json, news_json, trade_date, model_id, status
         FROM analysis_cache
-        WHERE stock_code = ? AND trade_date = ? AND model_id = ? AND status = 'success'
+        WHERE stock_code = ? AND trade_date = ? AND model_id = ?
         """,
         (stock_code, trade_date, str(subscription["model_id"])),
     )
@@ -645,6 +676,21 @@ async def report_page(request: Request, stock_code: str, trade_date: str, user=D
                 "user": user,
                 "stock_code": stock_code,
                 "model_id": str(subscription["model_id"]),
+                "cache_status": "missing",
+                "trade_date": trade_date,
+            },
+        )
+    if str(cache_row["status"]) != "success":
+        return templates.TemplateResponse(
+            request,
+            "report_empty.html",
+            {
+                "title": "报告页",
+                "user": user,
+                "stock_code": stock_code,
+                "model_id": str(subscription["model_id"]),
+                "cache_status": "failed",
+                "trade_date": trade_date,
             },
         )
     previous_row = await fetch_one(
@@ -693,6 +739,7 @@ async def settings_page(request: Request, user=Depends(page_user_or_redirect)):
         """
         SELECT model_id, display_name, points_per_call
         FROM model_pricing
+        WHERE is_active = 1 AND is_runnable = 1
         ORDER BY sort_order ASC, model_id ASC
         """,
     )
@@ -887,17 +934,7 @@ async def update_email_preferences(payload: EmailPreferencesPayload, user=Depend
 @app.post("/api/user/preferences/model")
 async def update_model_preference(payload: ModelPreferencePayload, user=Depends(current_user)):
     model_id = payload.preferred_model.strip()
-    row = await fetch_one(
-        settings.db_path,
-        """
-        SELECT model_id, display_name
-        FROM model_pricing
-        WHERE model_id = ? AND is_active = 1
-        """,
-        (model_id,),
-    )
-    if row is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Selected model is not available")
+    row = await _fetch_runnable_model(model_id)
     await execute(
         settings.db_path,
         "UPDATE users SET preferred_model = ? WHERE id = ?",
@@ -1038,6 +1075,7 @@ async def list_subscriptions(user=Depends(verified_user)):
 async def create_subscription(payload: SubscriptionCreatePayload, user=Depends(verified_user)):
     stock_code = _normalize_stock_code(payload.stock_code)
     stock_name = payload.stock_name.strip() or stock_code
+    await _fetch_runnable_model(payload.model_id)
     try:
         subscription_id = await execute(
             settings.db_path,
@@ -1065,6 +1103,7 @@ async def update_subscription(subscription_id: int, payload: SubscriptionUpdateP
     next_model_id = payload.model_id if payload.model_id is not None else str(row["model_id"])
     next_sort_order = payload.sort_order if payload.sort_order is not None else int(row["sort_order"])
     next_is_active = int(payload.is_active) if payload.is_active is not None else int(row["is_active"])
+    await _fetch_runnable_model(next_model_id)
     await execute(
         settings.db_path,
         """

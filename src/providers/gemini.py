@@ -5,7 +5,7 @@ import time
 from google import genai
 from google.genai import types
 
-from src.providers.base import GenerateConfig
+from src.providers.base import GenerateConfig, ProviderResult
 
 
 class GeminiProvider:
@@ -14,7 +14,7 @@ class GeminiProvider:
         self._model_name = model_name
         self._fallback_model_name = fallback_model_name
 
-    def generate(self, prompt: str, config: GenerateConfig) -> str:
+    def generate(self, prompt: str, config: GenerateConfig) -> ProviderResult:
         client = genai.Client(api_key=self._api_key)
         generate_config = types.GenerateContentConfig(
             temperature=config.temperature,
@@ -37,7 +37,12 @@ class GeminiProvider:
                         contents=prompt,
                         config=generate_config,
                     )
-                    return response.text
+                    return ProviderResult(
+                        text=response.text,
+                        actual_provider="gemini",
+                        actual_model_name=model,
+                        provider_response_id="",
+                    )
                 except Exception as exc:  # pragma: no cover - SDK/runtime dependent
                     last_error = exc
                     errors.append(f"{model} attempt {attempt + 1}: {exc}")

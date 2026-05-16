@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import sys
 import webbrowser
@@ -10,6 +11,7 @@ from zoneinfo import ZoneInfo
 from src.analyze import AnalysisError, analyze_market_data
 from src.config import load_settings
 from src.cost_engine import generate_cost_analysis
+from src.database import init_db
 from src.fetch_data import DataFetchError, fetch_market_data
 from src.fetch_news import fetch_news
 from src.logger import configure_logging
@@ -36,6 +38,7 @@ def main() -> int:
     args = parse_args()
     logger = configure_logging()
     settings = load_settings()
+    asyncio.run(init_db(settings.db_path))
     now = datetime.now(ZoneInfo(settings.timezone_name))
     today = get_today(settings.timezone_name)
 
@@ -103,15 +106,19 @@ def main() -> int:
         news_list = []
 
     try:
-        analysis = analyze_market_data(
-            api_key=settings.gemini_api_key or "",
-            model_id=settings.model_id,
-            model_name=settings.model_name,
-            market_data=market_data,
-            news_list=news_list,
-            fallback_model_name=settings.fallback_model_name,
+        analyze_output = analyze_market_data(
+            settings.model_id,
+            market_data,
+            news_list,
+            db_path=settings.db_path,
+            settings=settings,
         )
-        logger.info("Gemini analysis completed")
+        analysis = analyze_output.analysis
+        logger.info(
+            "Analysis completed with provider=%s model=%s",
+            analyze_output.actual_provider,
+            analyze_output.actual_model_name,
+        )
     except AnalysisError as exc:
         logger.error("Analysis failed: %s", exc)
         return 1

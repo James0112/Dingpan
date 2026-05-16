@@ -9,7 +9,7 @@
 
 - AKShare 拉取 A 股日线、资金流、个股新闻
 - 本地计算 MA5/MA10/MA20、MACD、量能状态
-- Gemini 2.5 Flash 输出结构化 JSON 分析
+- Gemini 3 Flash Preview / GPT-5.4 输出结构化 JSON 分析
 - Jinja2 渲染深色 HTML 邮件
 - Resend API 发送认证邮件与报告邮件
 - SQLite 持久化用户、订阅、共享分析缓存、Push 订阅
@@ -46,6 +46,9 @@ pip install -r requirements.txt
 
 ```bash
 GEMINI_API_KEY=your_gemini_api_key
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_BASE_URL=https://subapi.233clouds.com/v1
+OPENAI_REASONING_EFFORT=xhigh
 RECEIVER_EMAIL=your_receiver@example.com
 JWT_SECRET=change-this-in-production
 SITE_URL=http://127.0.0.1:8000
@@ -61,6 +64,9 @@ MAIL_FROM_REPORTS=reports@mail.manuflow.net
 
 ```bash
 export GEMINI_API_KEY="your_gemini_api_key"
+export OPENAI_API_KEY="your_openai_api_key"
+export OPENAI_BASE_URL="https://subapi.233clouds.com/v1"
+export OPENAI_REASONING_EFFORT="xhigh"
 export RECEIVER_EMAIL="first@example.com,second@example.com"
 export JWT_SECRET="change-this-in-production"
 export SITE_URL="http://127.0.0.1:8000"
@@ -82,6 +88,15 @@ export GEMINI_MODEL="gemini-3-flash-preview"
 export GEMINI_FALLBACK_MODEL="gemini-2.5-flash-lite"
 export GENERATE_TARGET_TIMEOUT_SECONDS="180"
 ```
+
+第一阶段当前可运行模型：
+
+- `gemini`
+- `gpt54`
+
+其中：
+- `gemini` 实际调用 `gemini-3-flash-preview`
+- `gpt54` 实际调用 `gpt-5.4`
 
 Web Push 变量：
 
@@ -142,6 +157,8 @@ python generate.py
 
 ```bash
 python generate.py --stock 603212
+python generate.py --model gemini --limit 1 --dry-run
+python generate.py --model gpt54 --limit 1 --dry-run
 python generate.py --date 2026-05-07
 python generate.py --dry-run
 python generate.py --today-if-trading-day

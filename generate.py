@@ -34,6 +34,9 @@ def _build_failure_result(trade_date_value: date, error_message: str) -> dict[st
         "market_data_json": "{}",
         "analysis_json": "{}",
         "news_json": "[]",
+        "actual_provider": "",
+        "actual_model_name": "",
+        "provider_response_id": "",
     }
 
 
@@ -71,13 +74,12 @@ def _generate_target_worker(
         )
         logger.info("Fetched %s news item(s) for %s (%s)", len(news_list), stock_code, stock_name)
         logger.info("Generating AI analysis for %s (%s) with %s", stock_code, stock_name, model_id)
-        analysis = analyze_market_data(
-            api_key=settings.gemini_api_key or "",
-            model_id=model_id,
-            model_name=settings.model_name,
-            market_data=market_data,
-            news_list=news_list,
-            fallback_model_name=settings.fallback_model_name,
+        analyze_output = analyze_market_data(
+            model_id,
+            market_data,
+            news_list,
+            db_path=settings.db_path,
+            settings=settings,
         )
         result_queue.put(
             {
@@ -85,8 +87,11 @@ def _generate_target_worker(
                 "error_message": "",
                 "trade_date": market_data.latest_trade_date.isoformat(),
                 "market_data_json": market_data_to_json(market_data),
-                "analysis_json": analysis_result_to_json(analysis),
+                "analysis_json": analysis_result_to_json(analyze_output.analysis),
                 "news_json": news_list_to_json(news_list),
+                "actual_provider": analyze_output.actual_provider,
+                "actual_model_name": analyze_output.actual_model_name,
+                "provider_response_id": analyze_output.provider_response_id,
             }
         )
     except (DataFetchError, AnalysisError, ValueError) as exc:
@@ -140,7 +145,11 @@ def _run_target_with_timeout(settings, target: dict[str, str], trade_date_value:
         result_queue.join_thread()
 
     if payload["status"] == "failed":
-        payload["error_message"] = f"{payload['error_message']} [stock={stock_code} model={model_id} name={stock_name}]"
+        payload["error_message"] = (
+            f"{payload['error_message']} "
+            f"[stock={stock_code} model={model_id} name={stock_name} "
+            f"provider={payload.get('actual_provider', '')} actual_model={payload.get('actual_model_name', '')}]"
+        )
     return payload
 
 
@@ -218,6 +227,9 @@ async def upsert_analysis_cache(
     market_data_json: str,
     analysis_json: str,
     news_json: str,
+    actual_provider: str,
+    actual_model_name: str,
+    provider_response_id: str,
 ) -> None:
     conn = await connect(db_path)
     try:
@@ -225,9 +237,10 @@ async def upsert_analysis_cache(
             """
             INSERT INTO analysis_cache (
                 stock_code, stock_name, trade_date, model_id, analysis_version,
-                status, error_message, market_data_json, analysis_json, news_json
+                status, error_message, market_data_json, analysis_json, news_json,
+                actual_provider, actual_model_name, provider_response_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(stock_code, trade_date, model_id) DO UPDATE SET
                 stock_name=excluded.stock_name,
                 analysis_version=excluded.analysis_version,
@@ -236,6 +249,9 @@ async def upsert_analysis_cache(
                 market_data_json=excluded.market_data_json,
                 analysis_json=excluded.analysis_json,
                 news_json=excluded.news_json,
+                actual_provider=excluded.actual_provider,
+                actual_model_name=excluded.actual_model_name,
+                provider_response_id=excluded.provider_response_id,
                 created_at=CURRENT_TIMESTAMP
             """,
             (
@@ -249,6 +265,9 @@ async def upsert_analysis_cache(
                 market_data_json,
                 analysis_json,
                 news_json,
+                actual_provider,
+                actual_model_name,
+                provider_response_id,
             ),
         )
         await conn.commit()
@@ -339,6 +358,9 @@ async def run() -> int:
                     market_data_json=result["market_data_json"],
                     analysis_json=result["analysis_json"],
                     news_json=result["news_json"],
+                    actual_provider=result["actual_provider"],
+                    actual_model_name=result["actual_model_name"],
+                    provider_response_id=result["provider_response_id"],
                 )
             success_count += 1
         else:
@@ -356,6 +378,9 @@ async def run() -> int:
                     market_data_json=result["market_data_json"],
                     analysis_json=result["analysis_json"],
                     news_json=result["news_json"],
+                    actual_provider=result["actual_provider"],
+                    actual_model_name=result["actual_model_name"],
+                    provider_response_id=result["provider_response_id"],
                 )
 
     logger.info("Shared generation completed: success=%s failure=%s skipped=%s", success_count, failure_count, skipped_count)

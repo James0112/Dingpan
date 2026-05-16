@@ -2,11 +2,21 @@
 
 {% block content %}
 <section class="hero">
-  <div class="pill">暂无共享分析缓存</div>
+  {% if cache_status == "failed" %}
+  <div class="pill">分析生成失败</div>
+  <h1 style="margin:18px 0 10px;">{{ stock_code }} 的当前模型分析暂时不可用。</h1>
+  <p class="muted" style="max-width:720px;line-height:1.8;">
+    当前订阅模型是 <strong>{{ model_id }}</strong>{% if trade_date %}，请求交易日是 <strong>{{ trade_date }}</strong>{% endif %}。
+    该模型最近一次共享分析生成失败，请稍后重试，或先检查批量生成日志与上游模型配置。
+  </p>
+  {% else %}
+  <div class="pill">报告生成中</div>
   <h1 style="margin:18px 0 10px;">{{ stock_code }} 还没有可展示的报告。</h1>
   <p class="muted" style="max-width:720px;line-height:1.8;">
-    当前订阅模型是 <strong>{{ model_id }}</strong>。先运行批量生成脚本，把 `(stock_code, model_id)` 的共享分析写入 `analysis_cache`，这个页面就会显示真实报告。
+    当前订阅模型是 <strong>{{ model_id }}</strong>{% if trade_date %}，请求交易日是 <strong>{{ trade_date }}</strong>{% endif %}。
+    共享分析尚未生成完成，运行批量生成脚本后，这个页面会显示真实报告。
   </p>
+  {% endif %}
   <div class="row" style="margin-top:18px;">
     <a class="button secondary" href="/dashboard">返回自选</a>
   </div>

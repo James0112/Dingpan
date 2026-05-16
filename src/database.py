@@ -6,12 +6,12 @@ import aiosqlite
 
 
 MODEL_PRICING_SEED = (
-    ("gemini", "google", "Gemini Flash", 1, 1, 1),
-    ("deepseek", "deepseek", "DeepSeek", 1, 0, 2),
-    ("qwen", "alibaba", "通义千问", 1, 0, 3),
-    ("glm4", "zhipu", "GLM-4", 2, 0, 4),
-    ("gpt4", "openai", "GPT-4", 3, 0, 5),
-    ("claude", "anthropic", "Claude", 3, 0, 6),
+    ("gemini", "gemini", "Gemini 3 Flash Preview", "gemini-3-flash-preview", 1, 1, 1, 1),
+    ("deepseek", "deepseek", "DeepSeek", None, 1, 0, 0, 2),
+    ("qwen", "qwen", "通义千问", None, 1, 0, 0, 3),
+    ("glm", "glm", "GLM", None, 2, 0, 0, 4),
+    ("gpt54", "openai", "GPT-5.4", "gpt-5.4", 3, 1, 1, 5),
+    ("claude", "claude", "Claude", None, 3, 0, 0, 6),
 )
 
 
@@ -66,6 +66,9 @@ SCHEMA_STATEMENTS = (
         market_data_json TEXT NOT NULL,
         analysis_json TEXT NOT NULL,
         news_json TEXT NOT NULL,
+        actual_provider TEXT NOT NULL DEFAULT '',
+        actual_model_name TEXT NOT NULL DEFAULT '',
+        provider_response_id TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(stock_code, trade_date, model_id)
     )
@@ -92,7 +95,7 @@ SCHEMA_STATEMENTS = (
         context_snapshot_json TEXT NOT NULL DEFAULT '',
         points_consumed INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, stock_code, trade_date)
+        UNIQUE(user_id, stock_code, trade_date, model_id)
     )
     """,
     """
@@ -100,8 +103,10 @@ SCHEMA_STATEMENTS = (
         model_id TEXT PRIMARY KEY,
         provider TEXT NOT NULL,
         display_name TEXT NOT NULL,
+        upstream_model_name TEXT,
         points_per_call INTEGER NOT NULL,
         is_active BOOLEAN NOT NULL DEFAULT 1,
+        is_runnable BOOLEAN NOT NULL DEFAULT 0,
         sort_order INTEGER NOT NULL DEFAULT 0
     )
     """,
@@ -192,6 +197,24 @@ async def _ensure_schema_migrations(conn: aiosqlite.Connection) -> None:
         await conn.execute("ALTER TABLE users ADD COLUMN email_verified_at TEXT NOT NULL DEFAULT ''")
     if not await _column_exists(conn, "users", "daily_email_enabled"):
         await conn.execute("ALTER TABLE users ADD COLUMN daily_email_enabled INTEGER NOT NULL DEFAULT 0")
+    if not await _column_exists(conn, "model_pricing", "upstream_model_name"):
+        await conn.execute("ALTER TABLE model_pricing ADD COLUMN upstream_model_name TEXT")
+    if not await _column_exists(conn, "model_pricing", "is_runnable"):
+        await conn.execute("ALTER TABLE model_pricing ADD COLUMN is_runnable INTEGER NOT NULL DEFAULT 0")
+    if not await _column_exists(conn, "analysis_cache", "actual_provider"):
+        await conn.execute("ALTER TABLE analysis_cache ADD COLUMN actual_provider TEXT NOT NULL DEFAULT ''")
+    if not await _column_exists(conn, "analysis_cache", "actual_model_name"):
+        await conn.execute("ALTER TABLE analysis_cache ADD COLUMN actual_model_name TEXT NOT NULL DEFAULT ''")
+    if not await _column_exists(conn, "analysis_cache", "provider_response_id"):
+        await conn.execute("ALTER TABLE analysis_cache ADD COLUMN provider_response_id TEXT NOT NULL DEFAULT ''")
+    await conn.execute("UPDATE users SET preferred_model = 'gpt54' WHERE preferred_model = 'gpt4'")
+    await conn.execute("UPDATE users SET preferred_model = 'glm' WHERE preferred_model = 'glm4'")
+    await conn.execute("UPDATE subscriptions SET model_id = 'gpt54' WHERE model_id = 'gpt4'")
+    await conn.execute("UPDATE subscriptions SET model_id = 'glm' WHERE model_id = 'glm4'")
+    await conn.execute("UPDATE analysis_cache SET model_id = 'gpt54' WHERE model_id = 'gpt4'")
+    await conn.execute("UPDATE analysis_cache SET model_id = 'glm' WHERE model_id = 'glm4'")
+    await conn.execute("UPDATE usage_log SET model_id = 'gpt54' WHERE model_id = 'gpt4'")
+    await conn.execute("UPDATE usage_log SET model_id = 'glm' WHERE model_id = 'glm4'")
 
 
 async def init_db(db_path: str) -> None:
@@ -204,17 +227,20 @@ async def init_db(db_path: str) -> None:
         await conn.executemany(
             """
             INSERT INTO model_pricing
-                (model_id, provider, display_name, points_per_call, is_active, sort_order)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (model_id, provider, display_name, upstream_model_name, points_per_call, is_active, is_runnable, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(model_id) DO UPDATE SET
                 provider=excluded.provider,
                 display_name=excluded.display_name,
+                upstream_model_name=excluded.upstream_model_name,
                 points_per_call=excluded.points_per_call,
                 is_active=excluded.is_active,
+                is_runnable=excluded.is_runnable,
                 sort_order=excluded.sort_order
             """,
             MODEL_PRICING_SEED,
         )
+        await conn.execute("DELETE FROM model_pricing WHERE model_id IN ('glm4', 'gpt4')")
         await conn.commit()
     finally:
         await conn.close()

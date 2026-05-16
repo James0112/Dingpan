@@ -10,7 +10,14 @@ class GenerateConfig:
     max_output_tokens: int = 2500
 
 
-class ModelProvider(Protocol):
-    def generate(self, prompt: str, config: GenerateConfig) -> str:
-        """Send a prompt to the model provider and return raw JSON text."""
+@dataclass(frozen=True)
+class ProviderResult:
+    text: str
+    actual_provider: str
+    actual_model_name: str
+    provider_response_id: str = ""
 
+
+class ModelProvider(Protocol):
+    def generate(self, prompt: str, config: GenerateConfig) -> ProviderResult:
+        """Send a prompt to the model provider and return structured generation metadata."""
