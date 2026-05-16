@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+  .profile-shell {
+    max-width: 720px;
+    margin: 0 auto;
+    display: grid;
+    gap: 16px;
+  }
+  .profile-card {
+    display: grid;
+    gap: 14px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-soft);
+  }
+  .profile-subtitle {
+    margin: 8px 0 0;
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+  .profile-meta {
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .profile-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .profile-message {
+    min-height: 22px;
+  }
+</style>
+
+<div class="profile-shell">
+  <section>
+    <div class="row" style="justify-content:space-between;align-items:flex-start;gap:16px;">
+      <div>
+        <h1 style="margin:0;font-size:32px;font-weight:800;letter-spacing:-0.03em;">投资画像</h1>
+        <p class="profile-subtitle">这里先只做手动维护。你修改后，后续个性化建议会自动按新的画像重新生成。</p>
+      </div>
+      <a class="button secondary" href="/settings">返回设置</a>
+    </div>
+  </section>
+
+  <form class="profile-card stack" id="profile-form">
+    <div class="field">
+      <label for="risk_preference">风险偏好</label>
+      <select id="risk_preference" name="risk_preference">
+        <option value="" {% if not profile.risk_preference %}selected{% endif %}>未设置</option>
+        <option value="保守" {% if profile.risk_preference == "保守" %}selected{% endif %}>保守</option>
+        <option value="稳健" {% if profile.risk_preference == "稳健" %}selected{% endif %}>稳健</option>
+        <option value="激进" {% if profile.risk_preference == "激进" %}selected{% endif %}>激进</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="trading_style">交易风格</label>
+      <select id="trading_style" name="trading_style">
+        <option value="" {% if not profile.trading_style %}selected{% endif %}>未设置</option>
+        <option value="超短线" {% if profile.trading_style == "超短线" %}selected{% endif %}>超短线</option>
+        <option value="短线" {% if profile.trading_style == "短线" %}selected{% endif %}>短线</option>
+        <option value="中线" {% if profile.trading_style == "中线" %}selected{% endif %}>中线</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="focus_sectors">关注板块</label>
+      <input
+        id="focus_sectors"
+        name="focus_sectors"
+        value="{{ profile.focus_sectors|join(', ') }}"
+        placeholder="例如：机器人, 算力, 半导体"
+      >
+    </div>
+
+    <div class="field">
+      <label for="position_notes">持仓备注</label>
+      <textarea id="position_notes" name="position_notes" rows="4" placeholder="例如：偏好右侧确认后介入，单只仓位不想超过三成。">{{ profile.position_notes }}</textarea>
+    </div>
+
+    <div class="field">
+      <label for="custom_notes">其他补充</label>
+      <textarea id="custom_notes" name="custom_notes" rows="5" placeholder="例如：更在意回撤控制，不接受追高隔日大幅低开。">{{ profile.custom_notes }}</textarea>
+    </div>
+
+    <div class="profile-actions">
+      <div class="profile-meta" id="profile-meta">当前画像版本：{{ profile.context_version }}</div>
+      <div class="row">
+        <a class="button secondary" href="/settings">取消</a>
+        <button type="submit">保存画像</button>
+      </div>
+    </div>
+    <div class="message profile-message" id="profile-message"></div>
+  </form>
+</div>
+
+<script>
+  const profileForm = document.getElementById("profile-form");
+  const profileMessage = document.getElementById("profile-message");
+  const profileMeta = document.getElementById("profile-meta");
+
+  if (profileForm) {
+    profileForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      profileMessage.textContent = "正在保存...";
+      const response = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          risk_preference: profileForm.risk_preference.value,
+          trading_style: profileForm.trading_style.value,
+          focus_sectors: profileForm.focus_sectors.value,
+          position_notes: profileForm.position_notes.value,
+          custom_notes: profileForm.custom_notes.value
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        profileMessage.textContent = data.detail || "保存失败";
+        return;
+      }
+      profileMessage.textContent = data.changed ? "投资画像已更新，报告页会按新画像重新生成建议。" : (data.message || "投资画像已保存。");
+      profileMeta.textContent = `当前画像版本：${data.context_version || 0}`;
+    });
+  }
+</script>
+{% endblock %}

@@ -74,6 +74,18 @@ SCHEMA_STATEMENTS = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS user_profiles (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        risk_preference TEXT NOT NULL DEFAULT '',
+        trading_style TEXT NOT NULL DEFAULT '',
+        focus_sectors_json TEXT NOT NULL DEFAULT '[]',
+        position_notes TEXT NOT NULL DEFAULT '',
+        custom_notes TEXT NOT NULL DEFAULT '',
+        context_version INTEGER NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS user_context (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -91,9 +103,15 @@ SCHEMA_STATEMENTS = (
         stock_code TEXT NOT NULL,
         trade_date TEXT NOT NULL,
         model_id TEXT NOT NULL,
-        result_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        error_message TEXT NOT NULL DEFAULT '',
+        result_json TEXT NOT NULL DEFAULT '',
         context_snapshot_json TEXT NOT NULL DEFAULT '',
+        context_version INTEGER NOT NULL DEFAULT 0,
         points_consumed INTEGER NOT NULL DEFAULT 0,
+        actual_provider TEXT NOT NULL DEFAULT '',
+        actual_model_name TEXT NOT NULL DEFAULT '',
+        provider_response_id TEXT NOT NULL DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, stock_code, trade_date, model_id)
     )
@@ -161,6 +179,8 @@ SCHEMA_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id, is_active, sort_order)",
     "CREATE INDEX IF NOT EXISTS idx_subscriptions_stock ON subscriptions(stock_code, model_id, is_active)",
     "CREATE INDEX IF NOT EXISTS idx_analysis_cache_lookup ON analysis_cache(stock_code, trade_date, model_id)",
+    "CREATE INDEX IF NOT EXISTS idx_personalized_analysis_lookup ON personalized_analysis(user_id, stock_code, trade_date, model_id)",
+    "CREATE INDEX IF NOT EXISTS idx_user_profiles_updated ON user_profiles(updated_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_user_context_lookup ON user_context(user_id, stock_code, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_email_tokens_hash ON email_tokens(token_hash)",
@@ -207,6 +227,28 @@ async def _ensure_schema_migrations(conn: aiosqlite.Connection) -> None:
         await conn.execute("ALTER TABLE analysis_cache ADD COLUMN actual_model_name TEXT NOT NULL DEFAULT ''")
     if not await _column_exists(conn, "analysis_cache", "provider_response_id"):
         await conn.execute("ALTER TABLE analysis_cache ADD COLUMN provider_response_id TEXT NOT NULL DEFAULT ''")
+    if not await _column_exists(conn, "user_profiles", "focus_sectors_json"):
+        await conn.execute("ALTER TABLE user_profiles ADD COLUMN focus_sectors_json TEXT NOT NULL DEFAULT '[]'")
+    if not await _column_exists(conn, "user_profiles", "position_notes"):
+        await conn.execute("ALTER TABLE user_profiles ADD COLUMN position_notes TEXT NOT NULL DEFAULT ''")
+    if not await _column_exists(conn, "user_profiles", "custom_notes"):
+        await conn.execute("ALTER TABLE user_profiles ADD COLUMN custom_notes TEXT NOT NULL DEFAULT ''")
+    if not await _column_exists(conn, "user_profiles", "context_version"):
+        await conn.execute("ALTER TABLE user_profiles ADD COLUMN context_version INTEGER NOT NULL DEFAULT 0")
+    if not await _column_exists(conn, "user_profiles", "updated_at"):
+        await conn.execute("ALTER TABLE user_profiles ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+    if not await _column_exists(conn, "personalized_analysis", "status"):
+        await conn.execute("ALTER TABLE personalized_analysis ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'")
+    if not await _column_exists(conn, "personalized_analysis", "error_message"):
+        await conn.execute("ALTER TABLE personalized_analysis ADD COLUMN error_message TEXT NOT NULL DEFAULT ''")
+    if not await _column_exists(conn, "personalized_analysis", "context_version"):
+        await conn.execute("ALTER TABLE personalized_analysis ADD COLUMN context_version INTEGER NOT NULL DEFAULT 0")
+    if not await _column_exists(conn, "personalized_analysis", "actual_provider"):
+        await conn.execute("ALTER TABLE personalized_analysis ADD COLUMN actual_provider TEXT NOT NULL DEFAULT ''")
+    if not await _column_exists(conn, "personalized_analysis", "actual_model_name"):
+        await conn.execute("ALTER TABLE personalized_analysis ADD COLUMN actual_model_name TEXT NOT NULL DEFAULT ''")
+    if not await _column_exists(conn, "personalized_analysis", "provider_response_id"):
+        await conn.execute("ALTER TABLE personalized_analysis ADD COLUMN provider_response_id TEXT NOT NULL DEFAULT ''")
     await conn.execute("UPDATE users SET preferred_model = 'gpt54' WHERE preferred_model = 'gpt4'")
     await conn.execute("UPDATE users SET preferred_model = 'glm' WHERE preferred_model = 'glm4'")
     await conn.execute("UPDATE subscriptions SET model_id = 'gpt54' WHERE model_id = 'gpt4'")

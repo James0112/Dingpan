@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
+import json
 from pathlib import Path
 import sqlite3
 import subprocess
@@ -30,6 +31,7 @@ from src.fetch_data import DataFetchError, fetch_market_data
 from src.fetch_news import fetch_news
 from src.analyze import AnalysisError, analyze_market_data
 from src.mailer import MailerError, render_template, send_resend_email
+from src.personalize import PersonalizedAnalysisError, generate_personalized_analysis
 from src.push import (
     PushError,
     delete_push_subscription,
@@ -47,7 +49,11 @@ from src.render_report import (
     market_data_from_json,
     news_list_to_json,
     news_list_from_json,
+    personalized_analysis_from_json,
+    personalized_analysis_to_json,
+    user_profile_to_json,
 )
+from src.schemas import MarketData, UserProfile
 from src.trading_calendar import (
     TradingCalendarError,
     fallback_latest_trade_date,
@@ -115,6 +121,14 @@ class EmailPreferencesPayload(BaseModel):
 
 class ModelPreferencePayload(BaseModel):
     preferred_model: str = Field(min_length=1, max_length=32)
+
+
+class UserProfilePayload(BaseModel):
+    risk_preference: str = Field(default="", max_length=32)
+    trading_style: str = Field(default="", max_length=32)
+    focus_sectors: str = Field(default="", max_length=500)
+    position_notes: str = Field(default="", max_length=2000)
+    custom_notes: str = Field(default="", max_length=2000)
 
 
 class SubscriptionCreatePayload(BaseModel):
@@ -252,6 +266,79 @@ async def _fetch_runnable_model(model_id: str):
     return row
 
 
+def _build_default_user_profile() -> UserProfile:
+    return UserProfile(
+        risk_preference="",
+        trading_style="",
+        focus_sectors=[],
+        position_notes="",
+        custom_notes="",
+        context_version=0,
+    )
+
+
+def _normalize_focus_sectors(raw_value: str) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in raw_value.replace("，", ",").replace("、", ",").split(","):
+        value = item.strip()
+        if not value:
+            continue
+        lowered = value.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        normalized.append(value)
+    return normalized[:12]
+
+
+def _user_profile_from_row(row) -> UserProfile:
+    if row is None:
+        return _build_default_user_profile()
+    try:
+        focus_sectors = json.loads(str(row["focus_sectors_json"] or "[]"))
+    except json.JSONDecodeError:
+        focus_sectors = []
+    return UserProfile(
+        risk_preference=str(row["risk_preference"] or ""),
+        trading_style=str(row["trading_style"] or ""),
+        focus_sectors=[str(item) for item in focus_sectors if str(item).strip()],
+        position_notes=str(row["position_notes"] or ""),
+        custom_notes=str(row["custom_notes"] or ""),
+        context_version=int(row["context_version"] or 0),
+    )
+
+
+async def _load_user_profile(user_id: int) -> UserProfile:
+    row = await fetch_one(
+        settings.db_path,
+        """
+        SELECT risk_preference, trading_style, focus_sectors_json, position_notes, custom_notes, context_version
+        FROM user_profiles
+        WHERE user_id = ?
+        """,
+        (user_id,),
+    )
+    return _user_profile_from_row(row)
+
+
+def _load_user_profile_sync(user_id: int) -> UserProfile:
+    conn = sqlite3.connect(settings.db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            """
+            SELECT risk_preference, trading_style, focus_sectors_json, position_notes, custom_notes, context_version
+            FROM user_profiles
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    return _user_profile_from_row(row)
+
+
 def _resolve_generation_trade_date() -> date:
     today = get_today(settings.timezone_name)
     try:
@@ -322,6 +409,278 @@ def _upsert_analysis_cache_sync(
         conn.commit()
     finally:
         conn.close()
+
+
+def _upsert_personalized_analysis_sync(
+    *,
+    user_id: int,
+    stock_code: str,
+    trade_date: str,
+    model_id: str,
+    status_value: str,
+    error_message: str,
+    result_json: str,
+    context_snapshot_json: str,
+    context_version: int,
+    actual_provider: str,
+    actual_model_name: str,
+    provider_response_id: str,
+) -> None:
+    conn = sqlite3.connect(settings.db_path)
+    try:
+        cursor = conn.execute(
+            """
+            UPDATE personalized_analysis
+            SET
+                status = ?,
+                error_message = ?,
+                result_json = ?,
+                context_snapshot_json = ?,
+                context_version = ?,
+                actual_provider = ?,
+                actual_model_name = ?,
+                provider_response_id = ?,
+                created_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND stock_code = ? AND trade_date = ? AND model_id = ?
+            """,
+            (
+                status_value,
+                error_message,
+                result_json,
+                context_snapshot_json,
+                context_version,
+                actual_provider,
+                actual_model_name,
+                provider_response_id,
+                user_id,
+                stock_code,
+                trade_date,
+                model_id,
+            ),
+        )
+        if cursor.rowcount == 0:
+            conn.execute(
+                """
+                INSERT INTO personalized_analysis (
+                    user_id, stock_code, trade_date, model_id, status, error_message,
+                    result_json, context_snapshot_json, context_version, points_consumed,
+                    actual_provider, actual_model_name, provider_response_id, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, CURRENT_TIMESTAMP)
+                """,
+                (
+                    user_id,
+                    stock_code,
+                    trade_date,
+                    model_id,
+                    status_value,
+                    error_message,
+                    result_json,
+                    context_snapshot_json,
+                    context_version,
+                    actual_provider,
+                    actual_model_name,
+                    provider_response_id,
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _generate_personalized_analysis_for_user_sync(
+    user_id: int,
+    stock_code: str,
+    trade_date: str,
+    model_id: str,
+    cost_price: float,
+) -> None:
+    conn = sqlite3.connect(settings.db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        cache_row = conn.execute(
+            """
+            SELECT market_data_json, analysis_json, status
+            FROM analysis_cache
+            WHERE stock_code = ? AND trade_date = ? AND model_id = ?
+            """,
+            (stock_code, trade_date, model_id),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if cache_row is None or str(cache_row["status"]) != "success":
+        _upsert_personalized_analysis_sync(
+            user_id=user_id,
+            stock_code=stock_code,
+            trade_date=trade_date,
+            model_id=model_id,
+            status_value="failed",
+            error_message="Shared analysis is not ready",
+            result_json="",
+            context_snapshot_json="",
+            context_version=0,
+            actual_provider="",
+            actual_model_name="",
+            provider_response_id="",
+        )
+        return
+
+    profile = _load_user_profile_sync(user_id)
+    shared_market_data = market_data_from_json(str(cache_row["market_data_json"]))
+    market_data = MarketData(
+        stock_code=shared_market_data.stock_code,
+        stock_name=shared_market_data.stock_name,
+        cost_price=cost_price,
+        latest_trade_date=shared_market_data.latest_trade_date,
+        snapshot=shared_market_data.snapshot,
+        indicators=shared_market_data.indicators,
+        fund_flow=shared_market_data.fund_flow,
+        recent_5d_summary=shared_market_data.recent_5d_summary,
+    )
+    shared_analysis = analysis_result_from_json(str(cache_row["analysis_json"]))
+    try:
+        output = generate_personalized_analysis(
+            model_id,
+            market_data,
+            shared_analysis,
+            profile,
+            db_path=settings.db_path,
+            settings=settings,
+        )
+        _upsert_personalized_analysis_sync(
+            user_id=user_id,
+            stock_code=stock_code,
+            trade_date=trade_date,
+            model_id=model_id,
+            status_value="success",
+            error_message="",
+            result_json=personalized_analysis_to_json(output.result),
+            context_snapshot_json=user_profile_to_json(profile),
+            context_version=profile.context_version,
+            actual_provider=output.actual_provider,
+            actual_model_name=output.actual_model_name,
+            provider_response_id=output.provider_response_id,
+        )
+    except PersonalizedAnalysisError as exc:
+        _upsert_personalized_analysis_sync(
+            user_id=user_id,
+            stock_code=stock_code,
+            trade_date=trade_date,
+            model_id=model_id,
+            status_value="failed",
+            error_message=str(exc),
+            result_json="",
+            context_snapshot_json=user_profile_to_json(profile),
+            context_version=profile.context_version,
+            actual_provider="",
+            actual_model_name="",
+            provider_response_id="",
+        )
+
+
+async def _load_personalized_analysis_state(
+    *,
+    user_id: int,
+    stock_code: str,
+    trade_date: str,
+    model_id: str,
+    profile: UserProfile,
+) -> dict[str, object]:
+    row = await fetch_one(
+        settings.db_path,
+        """
+        SELECT status, error_message, result_json, context_version
+        FROM personalized_analysis
+        WHERE user_id = ? AND stock_code = ? AND trade_date = ? AND model_id = ?
+        """,
+        (user_id, stock_code, trade_date, model_id),
+    )
+    if row is None:
+        return {"state": "missing", "result": None, "error_message": ""}
+
+    row_version = int(row["context_version"] or 0)
+    if row_version != profile.context_version:
+        return {"state": "stale", "result": None, "error_message": ""}
+
+    state = str(row["status"] or "pending")
+    if state == "success" and str(row["result_json"] or "").strip():
+        return {
+            "state": "ready",
+            "result": personalized_analysis_from_json(str(row["result_json"])),
+            "error_message": "",
+        }
+    if state == "failed":
+        return {"state": "failed", "result": None, "error_message": str(row["error_message"] or "")}
+    return {"state": "generating", "result": None, "error_message": ""}
+
+
+async def _queue_personalized_generation(
+    background_tasks: BackgroundTasks,
+    *,
+    user_id: int,
+    stock_code: str,
+    trade_date: str,
+    model_id: str,
+    cost_price: float,
+    profile: UserProfile,
+) -> None:
+    conn = await connect(settings.db_path)
+    try:
+        cursor = await conn.execute(
+            """
+            UPDATE personalized_analysis
+            SET
+                status = 'pending',
+                error_message = '',
+                result_json = '',
+                context_snapshot_json = ?,
+                context_version = ?,
+                actual_provider = '',
+                actual_model_name = '',
+                provider_response_id = '',
+                created_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND stock_code = ? AND trade_date = ? AND model_id = ?
+            """,
+            (
+                user_profile_to_json(profile),
+                profile.context_version,
+                user_id,
+                stock_code,
+                trade_date,
+                model_id,
+            ),
+        )
+        if cursor.rowcount == 0:
+            await conn.execute(
+                """
+                INSERT INTO personalized_analysis (
+                    user_id, stock_code, trade_date, model_id, status, error_message,
+                    result_json, context_snapshot_json, context_version, points_consumed,
+                    actual_provider, actual_model_name, provider_response_id, created_at
+                )
+                VALUES (?, ?, ?, ?, 'pending', '', '', ?, ?, 0, '', '', '', CURRENT_TIMESTAMP)
+                """,
+                (
+                    user_id,
+                    stock_code,
+                    trade_date,
+                    model_id,
+                    user_profile_to_json(profile),
+                    profile.context_version,
+                ),
+            )
+        await conn.commit()
+    finally:
+        await conn.close()
+    background_tasks.add_task(
+        _generate_personalized_analysis_for_user_sync,
+        user_id,
+        stock_code,
+        trade_date,
+        model_id,
+        cost_price,
+    )
 
 
 def _generate_shared_analysis_for_user_sync(user_id: int, model_id: str) -> None:
@@ -856,7 +1215,13 @@ async def report_latest_page(request: Request, stock_code: str, user=Depends(pag
 
 
 @app.get("/report/{stock_code}/{trade_date}", response_class=HTMLResponse)
-async def report_page(request: Request, stock_code: str, trade_date: str, user=Depends(page_user_or_redirect)):
+async def report_page(
+    request: Request,
+    stock_code: str,
+    trade_date: str,
+    background_tasks: BackgroundTasks,
+    user=Depends(page_user_or_redirect),
+):
     if user is None:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     if not user.email_verified_at:
@@ -929,6 +1294,25 @@ async def report_page(request: Request, stock_code: str, trade_date: str, user=D
     market_data = market_data_from_json(str(cache_row["market_data_json"]))
     analysis = analysis_result_from_json(str(cache_row["analysis_json"]))
     news_list = news_list_from_json(str(cache_row["news_json"]))
+    profile = await _load_user_profile(user.id)
+    personalized_state = await _load_personalized_analysis_state(
+        user_id=user.id,
+        stock_code=stock_code,
+        trade_date=trade_date,
+        model_id=str(subscription["model_id"]),
+        profile=profile,
+    )
+    if personalized_state["state"] in {"missing", "stale"}:
+        await _queue_personalized_generation(
+            background_tasks,
+            user_id=user.id,
+            stock_code=stock_code,
+            trade_date=trade_date,
+            model_id=str(subscription["model_id"]),
+            cost_price=float(subscription["cost_price"]),
+            profile=profile,
+        )
+        personalized_state = {"state": "generating", "result": None, "error_message": ""}
     context = build_report_context(
         market_data,
         analysis,
@@ -941,7 +1325,16 @@ async def report_page(request: Request, stock_code: str, trade_date: str, user=D
     return templates.TemplateResponse(
         request,
         "report.html",
-        _template_context(request, title="报告", user=user, **context),
+        _template_context(
+            request,
+            title="报告",
+            user=user,
+            personalized=personalized_state["result"],
+            personalized_state=str(personalized_state["state"]),
+            personalized_error_message=str(personalized_state["error_message"]),
+            profile=profile,
+            **context,
+        ),
     )
 
 
@@ -962,6 +1355,18 @@ async def settings_page(request: Request, user=Depends(page_user_or_redirect)):
         request,
         "settings_placeholder.html",
         _template_context(request, title="我的", user=user, models=models),
+    )
+
+
+@app.get("/settings/profile", response_class=HTMLResponse)
+async def profile_settings_page(request: Request, user=Depends(page_user_or_redirect)):
+    if user is None:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    profile = await _load_user_profile(user.id)
+    return templates.TemplateResponse(
+        request,
+        "profile_settings.html",
+        _template_context(request, title="投资画像", user=user, profile=profile),
     )
 
 
@@ -1179,6 +1584,144 @@ async def update_model_preference(
 async def model_preference_status(user=Depends(current_user)):
     status_payload = await _model_generation_status(user.id, user.preferred_model)
     return {"ok": True, "preferred_model": user.preferred_model, **status_payload}
+
+
+@app.get("/api/user/profile")
+async def user_profile_detail(user=Depends(current_user)):
+    profile = await _load_user_profile(user.id)
+    return {
+        "ok": True,
+        "risk_preference": profile.risk_preference,
+        "trading_style": profile.trading_style,
+        "focus_sectors": profile.focus_sectors,
+        "position_notes": profile.position_notes,
+        "custom_notes": profile.custom_notes,
+        "context_version": profile.context_version,
+    }
+
+
+@app.put("/api/user/profile")
+async def update_user_profile(payload: UserProfilePayload, user=Depends(current_user)):
+    current_profile = await _load_user_profile(user.id)
+    next_focus_sectors = _normalize_focus_sectors(payload.focus_sectors)
+    next_risk_preference = payload.risk_preference.strip()
+    next_trading_style = payload.trading_style.strip()
+    next_position_notes = payload.position_notes.strip()
+    next_custom_notes = payload.custom_notes.strip()
+    changed = any(
+        [
+            next_risk_preference != current_profile.risk_preference,
+            next_trading_style != current_profile.trading_style,
+            next_focus_sectors != current_profile.focus_sectors,
+            next_position_notes != current_profile.position_notes,
+            next_custom_notes != current_profile.custom_notes,
+        ]
+    )
+    next_context_version = current_profile.context_version + 1 if changed else current_profile.context_version
+    await execute(
+        settings.db_path,
+        """
+        INSERT INTO user_profiles (
+            user_id, risk_preference, trading_style, focus_sectors_json,
+            position_notes, custom_notes, context_version, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(user_id) DO UPDATE SET
+            risk_preference=excluded.risk_preference,
+            trading_style=excluded.trading_style,
+            focus_sectors_json=excluded.focus_sectors_json,
+            position_notes=excluded.position_notes,
+            custom_notes=excluded.custom_notes,
+            context_version=excluded.context_version,
+            updated_at=CURRENT_TIMESTAMP
+        """,
+        (
+            user.id,
+            next_risk_preference,
+            next_trading_style,
+            json.dumps(next_focus_sectors, ensure_ascii=False),
+            next_position_notes,
+            next_custom_notes,
+            next_context_version,
+        ),
+    )
+    return {
+        "ok": True,
+        "message": "投资画像已更新。",
+        "risk_preference": next_risk_preference,
+        "trading_style": next_trading_style,
+        "focus_sectors": next_focus_sectors,
+        "position_notes": next_position_notes,
+        "custom_notes": next_custom_notes,
+        "context_version": next_context_version,
+        "changed": changed,
+    }
+
+
+@app.get("/api/report/{stock_code}/{trade_date}/personalized-status")
+async def personalized_report_status(stock_code: str, trade_date: str, user=Depends(verified_user)):
+    subscription = await fetch_one(
+        settings.db_path,
+        """
+        SELECT stock_code, cost_price, model_id
+        FROM subscriptions
+        WHERE user_id = ? AND stock_code = ?
+        ORDER BY id ASC
+        """,
+        (user.id, stock_code),
+    )
+    if subscription is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+    profile = await _load_user_profile(user.id)
+    state_payload = await _load_personalized_analysis_state(
+        user_id=user.id,
+        stock_code=stock_code,
+        trade_date=trade_date,
+        model_id=str(subscription["model_id"]),
+        profile=profile,
+    )
+    state_value = str(state_payload["state"])
+    if state_value in {"missing", "stale"}:
+        state_value = "generating"
+    return {
+        "ok": True,
+        "state": state_value,
+        "error_message": state_payload["error_message"],
+        "report_url": f"/report/{stock_code}/{trade_date}",
+        "context_version": profile.context_version,
+    }
+
+
+@app.post("/api/report/{stock_code}/{trade_date}/personalized-generate")
+async def personalized_report_generate(
+    stock_code: str,
+    trade_date: str,
+    background_tasks: BackgroundTasks,
+    user=Depends(verified_user),
+):
+    subscription = await fetch_one(
+        settings.db_path,
+        """
+        SELECT stock_code, cost_price, model_id
+        FROM subscriptions
+        WHERE user_id = ? AND stock_code = ?
+        ORDER BY id ASC
+        """,
+        (user.id, stock_code),
+    )
+    if subscription is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+    profile = await _load_user_profile(user.id)
+    await _queue_personalized_generation(
+        background_tasks,
+        user_id=user.id,
+        stock_code=stock_code,
+        trade_date=trade_date,
+        model_id=str(subscription["model_id"]),
+        cost_price=float(subscription["cost_price"]),
+        profile=profile,
+    )
+    return {"ok": True, "state": "generating", "message": "正在重新生成个性化建议。"}
 
 
 @app.get("/api/admin/users")

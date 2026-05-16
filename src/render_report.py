@@ -5,7 +5,16 @@ from dataclasses import asdict
 from datetime import date, datetime
 
 from src.cost_engine import generate_cost_analysis
-from src.schemas import AnalysisResult, FundFlow, MarketData, MarketSnapshot, NewsItem, TechnicalIndicators
+from src.schemas import (
+    AnalysisResult,
+    FundFlow,
+    MarketData,
+    MarketSnapshot,
+    NewsItem,
+    PersonalizedAnalysisResult,
+    TechnicalIndicators,
+    UserProfile,
+)
 
 
 ANALYSIS_VERSION = 1
@@ -33,6 +42,14 @@ def news_list_to_json(news_list: list[NewsItem]) -> str:
         for item in news_list
     ]
     return json.dumps(payload, ensure_ascii=False)
+
+
+def personalized_analysis_to_json(personalized: PersonalizedAnalysisResult) -> str:
+    return json.dumps(asdict(personalized), ensure_ascii=False)
+
+
+def user_profile_to_json(profile: UserProfile) -> str:
+    return json.dumps(asdict(profile), ensure_ascii=False)
 
 
 def market_data_from_json(raw: str) -> MarketData:
@@ -94,6 +111,27 @@ def analysis_result_from_json(raw: str) -> AnalysisResult:
         bias=str(payload["bias"]),
         support_price=float(payload["support_price"]),
         resistance_price=float(payload["resistance_price"]),
+    )
+
+
+def personalized_analysis_from_json(raw: str) -> PersonalizedAnalysisResult:
+    payload = json.loads(raw)
+    return PersonalizedAnalysisResult(
+        executive_summary=str(payload["executive_summary"]),
+        action_advice=str(payload["action_advice"]),
+        personal_risk_notes=[str(item) for item in payload["personal_risk_notes"]],
+    )
+
+
+def user_profile_from_json(raw: str) -> UserProfile:
+    payload = json.loads(raw)
+    return UserProfile(
+        risk_preference=str(payload.get("risk_preference") or ""),
+        trading_style=str(payload.get("trading_style") or ""),
+        focus_sectors=[str(item) for item in payload.get("focus_sectors") or []],
+        position_notes=str(payload.get("position_notes") or ""),
+        custom_notes=str(payload.get("custom_notes") or ""),
+        context_version=int(payload.get("context_version") or 0),
     )
 
 

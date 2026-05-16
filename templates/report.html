@@ -196,6 +196,25 @@
       padding: 0 4px;
     }
   }
+  .report-status {
+    display: grid;
+    gap: 10px;
+    padding: 16px 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-soft);
+  }
+  .report-status-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+  }
+  .report-status-copy {
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
 </style>
 
 <div class="report-shell">
@@ -226,14 +245,38 @@
   <section class="hero">
     <div class="row" style="justify-content:space-between;align-items:flex-start;">
       <div>
-        <div class="pill">核心结论</div>
-        <p style="line-height:1.9;margin:16px 0 0;color:var(--text-primary);">{{ analysis.executive_summary }}</p>
+        <div class="pill">{% if personalized_state == "ready" %}个性化结论{% else %}共享结论{% endif %}</div>
+        <p style="line-height:1.9;margin:16px 0 0;color:var(--text-primary);">
+          {% if personalized_state == "ready" and personalized %}
+          {{ personalized.executive_summary }}
+          {% else %}
+          {{ analysis.executive_summary }}
+          {% endif %}
+        </p>
       </div>
       {% if market_data.cost_price > 0 %}
       <div class="row">
         <span class="pill">成本 ¥{{ '%.2f'|format(market_data.cost_price) }}</span>
         <span class="pill">浮盈 {{ '%+.2f'|format(pnl_pct) }}%</span>
       </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="report-status" id="personalized-status-panel" data-personalized-state="{{ personalized_state }}">
+    <div class="report-status-head">
+      <div class="pill">个性化建议状态</div>
+      {% if personalized_state == "failed" %}
+      <button class="button secondary" type="button" id="personalized-retry-button">重新生成</button>
+      {% endif %}
+    </div>
+    <div class="report-status-copy" id="personalized-status-copy">
+      {% if personalized_state == "ready" %}
+      已合并你的投资画像与持仓成本，当前页面展示的是共享分析 + 个性化建议。
+      {% elif personalized_state == "failed" %}
+      个性化建议生成失败。{% if personalized_error_message %}{{ personalized_error_message }}{% else %}可以手动重试。{% endif %}
+      {% else %}
+      正在基于你的投资画像与当前持仓生成个性化建议。共享分析已可查看，页面会自动刷新状态。
       {% endif %}
     </div>
   </section>
@@ -320,11 +363,23 @@
     </section>
     <section class="card">
       <p class="section-title">操作建议与风险</p>
-      <p style="line-height:1.85;color:var(--text-secondary);margin:0 0 12px;">{{ analysis.action_advice }}</p>
+      <p style="line-height:1.85;color:var(--text-secondary);margin:0 0 12px;">
+        {% if personalized_state == "ready" and personalized %}
+        {{ personalized.action_advice }}
+        {% else %}
+        {{ analysis.action_advice }}
+        {% endif %}
+      </p>
       <div class="stack">
+        {% if personalized_state == "ready" and personalized %}
+        {% for note in personalized.personal_risk_notes %}
+        <div class="muted">⚠ {{ note }}</div>
+        {% endfor %}
+        {% else %}
         {% for note in analysis.risk_notes %}
         <div class="muted">⚠ {{ note }}</div>
         {% endfor %}
+        {% endif %}
       </div>
     </section>
   </div>
@@ -339,6 +394,9 @@
   const reportBackbar = document.getElementById("report-backbar");
   const reportTopbar = document.getElementById("report-topbar");
   const reportRefreshButton = document.getElementById("report-refresh");
+  const personalizedStatusPanel = document.getElementById("personalized-status-panel");
+  const personalizedStatusCopy = document.getElementById("personalized-status-copy");
+  const personalizedRetryButton = document.getElementById("personalized-retry-button");
   if (reportBackbar && reportTopbar) {
     const syncBackbarState = () => {
       const topbarBottom = reportTopbar.getBoundingClientRect().bottom;
@@ -354,5 +412,59 @@
       window.location.reload();
     });
   }
+
+  async function pollPersonalizedStatus() {
+    if (!personalizedStatusPanel) {
+      return;
+    }
+    const currentState = personalizedStatusPanel.dataset.personalizedState || "";
+    if (currentState === "ready" || currentState === "failed") {
+      return;
+    }
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 120000) {
+      const response = await fetch(`/api/report/{{ market_data.stock_code }}/{{ market_data.latest_trade_date }}/personalized-status`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        personalizedStatusCopy.textContent = data.detail || "个性化状态读取失败";
+        return;
+      }
+      if (data.state === "ready") {
+        window.location.reload();
+        return;
+      }
+      if (data.state === "failed") {
+        personalizedStatusPanel.dataset.personalizedState = "failed";
+        personalizedStatusCopy.textContent = data.error_message || "个性化建议生成失败，请稍后重试。";
+        window.location.reload();
+        return;
+      }
+      personalizedStatusCopy.textContent = "正在生成个性化建议，共享分析已可查看，页面会自动更新。";
+      await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    }
+    personalizedStatusCopy.textContent = "个性化建议仍在生成中，请稍后手动刷新。";
+  }
+
+  if (personalizedRetryButton) {
+    personalizedRetryButton.addEventListener("click", async () => {
+      personalizedRetryButton.disabled = true;
+      personalizedStatusCopy.textContent = "正在重新生成个性化建议...";
+      const response = await fetch(`/api/report/{{ market_data.stock_code }}/{{ market_data.latest_trade_date }}/personalized-generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        personalizedStatusCopy.textContent = data.detail || "重新生成失败";
+        personalizedRetryButton.disabled = false;
+        return;
+      }
+      personalizedStatusPanel.dataset.personalizedState = "generating";
+      personalizedStatusCopy.textContent = data.message || "正在重新生成个性化建议。";
+      void pollPersonalizedStatus();
+    });
+  }
+
+  void pollPersonalizedStatus();
 </script>
 {% endblock %}

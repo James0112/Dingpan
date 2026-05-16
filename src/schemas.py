@@ -77,6 +77,23 @@ class AnalysisResult:
 
 
 @dataclass(frozen=True)
+class PersonalizedAnalysisResult:
+    executive_summary: str
+    action_advice: str
+    personal_risk_notes: list[str]
+
+
+@dataclass(frozen=True)
+class UserProfile:
+    risk_preference: str
+    trading_style: str
+    focus_sectors: list[str]
+    position_notes: str
+    custom_notes: str
+    context_version: int
+
+
+@dataclass(frozen=True)
 class CostAnalysis:
     cost_status: str
     pnl_pct: float
