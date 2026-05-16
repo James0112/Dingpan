@@ -638,6 +638,16 @@ def _personalized_dashboard_status(state: str) -> tuple[str, str]:
     return ("等待个性化生成", "已有共享分析，首次个性化建议会自动生成。")
 
 
+def _shared_dashboard_status(state: str, *, current_trade_date: str, latest_trade_date: str | None) -> tuple[str, str]:
+    if state == "ready":
+        return ("当前模型共享分析已就绪", f"当前模型的共享分析已经切到 {current_trade_date}。")
+    if state == "failed":
+        return ("当前模型共享分析失败", f"{current_trade_date} 的共享分析生成失败，请稍后重试。")
+    if latest_trade_date and latest_trade_date != current_trade_date:
+        return ("当前模型共享分析生成中", f"卡片内容还是 {latest_trade_date} 的旧报告，{current_trade_date} 的新共享分析仍在生成。")
+    return ("当前模型共享分析生成中", f"{current_trade_date} 的共享分析仍在生成，完成后个性化建议会继续补齐。")
+
+
 def _personalized_version_note(current_version: int, applied_version: int) -> str:
     if applied_version <= 0:
         return f"当前画像 v{current_version}，尚未应用到这份个性化建议。"
@@ -1174,6 +1184,7 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     profile = await _load_user_profile(user.id)
     profile_summary = _profile_summary_text(profile)
+    current_trade_date = _resolve_generation_trade_date().isoformat()
     subscription_rows = await fetch_all(
         settings.db_path,
         """
@@ -1213,6 +1224,16 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
     subscriptions = []
     for row in subscription_rows:
         item = dict(row)
+        shared_cache_row = await fetch_one(
+            settings.db_path,
+            """
+            SELECT status
+            FROM analysis_cache
+            WHERE stock_code = ? AND trade_date = ? AND model_id = ?
+            LIMIT 1
+            """,
+            (str(row["stock_code"]), current_trade_date, str(row["model_id"])),
+        )
         if row["market_data_json"] and row["analysis_json"]:
             market_data = market_data_from_json(str(row["market_data_json"]))
             analysis = analysis_result_from_json(str(row["analysis_json"]))
@@ -1228,6 +1249,18 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
             item["latest_change_pct"] = market_data.snapshot.change_pct
             item["latest_summary"] = analysis.executive_summary
             item["latest_trade_date"] = str(row["latest_trade_date"])
+            shared_state = "generating"
+            if shared_cache_row is not None:
+                shared_state = "ready" if str(shared_cache_row["status"]) == "success" else "failed"
+            shared_status_label, shared_status_copy = _shared_dashboard_status(
+                shared_state,
+                current_trade_date=current_trade_date,
+                latest_trade_date=item["latest_trade_date"],
+            )
+            item["shared_state"] = shared_state
+            item["shared_status_label"] = shared_status_label
+            item["shared_status_copy"] = shared_status_copy
+            item["current_trade_date"] = current_trade_date
             item["personalized_state"] = str(personalized_state["state"])
             item["personalized_status_label"] = status_label
             item["personalized_status_copy"] = status_copy
@@ -1245,6 +1278,18 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
             item["latest_change_pct"] = None
             item["latest_summary"] = ""
             item["latest_pnl_pct"] = None
+            shared_state = "generating"
+            if shared_cache_row is not None:
+                shared_state = "ready" if str(shared_cache_row["status"]) == "success" else "failed"
+            shared_status_label, shared_status_copy = _shared_dashboard_status(
+                shared_state,
+                current_trade_date=current_trade_date,
+                latest_trade_date=None,
+            )
+            item["shared_state"] = shared_state
+            item["shared_status_label"] = shared_status_label
+            item["shared_status_copy"] = shared_status_copy
+            item["current_trade_date"] = current_trade_date
             item["personalized_state"] = "waiting_shared"
             item["personalized_status_label"] = "等待共享分析"
             item["personalized_status_copy"] = "共享分析生成后，这里会继续补个性化建议状态。"

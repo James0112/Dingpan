@@ -325,6 +325,12 @@
               <span class="pill">成本 ¥{{ '%.2f'|format(item.cost_price) }}</span>
             </div>
             <div class="metric-row" style="margin-top:14px;">
+              <span class="pill {% if item.shared_state == 'ready' %}trend-up{% elif item.shared_state == 'failed' %}trend-down{% else %}trend-flat{% endif %}">
+                {{ item.shared_status_label }}
+              </span>
+            </div>
+            <p class="muted" style="margin:0;line-height:1.7;">{{ item.shared_status_copy }}</p>
+            <div class="metric-row" style="margin-top:14px;">
               <span class="pill {% if item.personalized_state == 'ready' %}trend-up{% elif item.personalized_state == 'failed' %}trend-down{% else %}trend-flat{% endif %}">
                 {{ item.personalized_status_label }}
               </span>
@@ -360,6 +366,12 @@
             </div>
             {% else %}
             <p class="muted" style="margin:0;line-height:1.8;">暂无共享分析缓存，系统生成后这里会显示最新摘要。</p>
+            <div class="metric-row" style="margin-top:14px;">
+              <span class="pill {% if item.shared_state == 'ready' %}trend-up{% elif item.shared_state == 'failed' %}trend-down{% else %}trend-flat{% endif %}">
+                {{ item.shared_status_label }}
+              </span>
+            </div>
+            <p class="muted" style="margin:0;line-height:1.7;">{{ item.shared_status_copy }}</p>
             <div class="metric-row" style="margin-top:14px;">
               <span class="pill trend-flat">{{ item.personalized_status_label }}</span>
               {% if item.profile_summary %}
