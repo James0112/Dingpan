@@ -10,7 +10,7 @@ MODEL_PRICING_SEED = (
     ("deepseek", "deepseek", "DeepSeek", None, 1, 0, 0, 2),
     ("qwen", "qwen", "通义千问", None, 1, 0, 0, 3),
     ("glm", "glm", "GLM", None, 2, 0, 0, 4),
-    ("gpt54", "openai", "GPT-5.4", "gpt-5.4", 3, 1, 1, 5),
+    ("gpt5.4", "openai", "GPT-5.4", "gpt-5.4", 3, 1, 1, 5),
     ("claude", "claude", "Claude", None, 3, 0, 0, 6),
 )
 
@@ -249,13 +249,19 @@ async def _ensure_schema_migrations(conn: aiosqlite.Connection) -> None:
         await conn.execute("ALTER TABLE personalized_analysis ADD COLUMN actual_model_name TEXT NOT NULL DEFAULT ''")
     if not await _column_exists(conn, "personalized_analysis", "provider_response_id"):
         await conn.execute("ALTER TABLE personalized_analysis ADD COLUMN provider_response_id TEXT NOT NULL DEFAULT ''")
-    await conn.execute("UPDATE users SET preferred_model = 'gpt54' WHERE preferred_model = 'gpt4'")
+    await conn.execute("UPDATE users SET preferred_model = 'gpt5.4' WHERE preferred_model = 'gpt4'")
+    await conn.execute("UPDATE users SET preferred_model = 'gpt5.4' WHERE preferred_model = 'gpt54'")
     await conn.execute("UPDATE users SET preferred_model = 'glm' WHERE preferred_model = 'glm4'")
-    await conn.execute("UPDATE subscriptions SET model_id = 'gpt54' WHERE model_id = 'gpt4'")
+    await conn.execute("UPDATE subscriptions SET model_id = 'gpt5.4' WHERE model_id = 'gpt4'")
+    await conn.execute("UPDATE subscriptions SET model_id = 'gpt5.4' WHERE model_id = 'gpt54'")
     await conn.execute("UPDATE subscriptions SET model_id = 'glm' WHERE model_id = 'glm4'")
-    await conn.execute("UPDATE analysis_cache SET model_id = 'gpt54' WHERE model_id = 'gpt4'")
+    await conn.execute("UPDATE analysis_cache SET model_id = 'gpt5.4' WHERE model_id = 'gpt4'")
+    await conn.execute("UPDATE analysis_cache SET model_id = 'gpt5.4' WHERE model_id = 'gpt54'")
     await conn.execute("UPDATE analysis_cache SET model_id = 'glm' WHERE model_id = 'glm4'")
-    await conn.execute("UPDATE usage_log SET model_id = 'gpt54' WHERE model_id = 'gpt4'")
+    await conn.execute("UPDATE personalized_analysis SET model_id = 'gpt5.4' WHERE model_id = 'gpt4'")
+    await conn.execute("UPDATE personalized_analysis SET model_id = 'gpt5.4' WHERE model_id = 'gpt54'")
+    await conn.execute("UPDATE usage_log SET model_id = 'gpt5.4' WHERE model_id = 'gpt4'")
+    await conn.execute("UPDATE usage_log SET model_id = 'gpt5.4' WHERE model_id = 'gpt54'")
     await conn.execute("UPDATE usage_log SET model_id = 'glm' WHERE model_id = 'glm4'")
 
 
@@ -282,7 +288,7 @@ async def init_db(db_path: str) -> None:
             """,
             MODEL_PRICING_SEED,
         )
-        await conn.execute("DELETE FROM model_pricing WHERE model_id IN ('glm4', 'gpt4')")
+        await conn.execute("DELETE FROM model_pricing WHERE model_id IN ('glm4', 'gpt4', 'gpt54')")
         await conn.commit()
     finally:
         await conn.close()

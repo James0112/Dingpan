@@ -92,11 +92,11 @@ export GENERATE_TARGET_TIMEOUT_SECONDS="180"
 第一阶段当前可运行模型：
 
 - `gemini`
-- `gpt54`
+- `gpt5.4`
 
 其中：
 - `gemini` 实际调用 `gemini-3-flash-preview`
-- `gpt54` 实际调用 `gpt-5.4`
+- `gpt5.4` 实际调用 `gpt-5.4`
 
 Web Push 变量：
 
@@ -158,7 +158,7 @@ python generate.py
 ```bash
 python generate.py --stock 603212
 python generate.py --model gemini --limit 1 --dry-run
-python generate.py --model gpt54 --limit 1 --dry-run
+python generate.py --model gpt5.4 --limit 1 --dry-run
 python generate.py --date 2026-05-07
 python generate.py --dry-run
 python generate.py --today-if-trading-day

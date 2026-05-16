@@ -20,7 +20,7 @@
 
 本方案要解决四件事：
 
-1. 在现有 Gemini 之外，接入可运行的 `gpt54` 模型。
+1. 在现有 Gemini 之外，接入可运行的 `gpt5.4` 模型。
 2. 保持用户选择的 `model_id` 在共享分析、个性化分析、对话中的一致性。
 3. 将报告拆分为“共享分析 + 个性化建议”，提升复用率并降低生成成本。
 4. 逐步引入用户画像和对话能力，但不让复杂能力阻塞第一阶段上线。
@@ -103,7 +103,7 @@
 - `openai -> OpenAIProvider`
 - 后续可扩展 `deepseek -> DeepSeekProvider`
 
-代码不维护 `model_id` 清单，不在代码里硬编码 `gpt54`、`gemini` 之类的模型目录。
+代码不维护 `model_id` 清单，不在代码里硬编码 `gpt5.4`、`gemini` 之类的模型目录。
 
 ---
 
@@ -119,7 +119,7 @@
 | `deepseek` | `deepseek` |
 | `qwen` | `qwen` |
 | `glm` | `glm` |
-| `gpt54` | `openai` |
+| `gpt5.4` | `openai` |
 | `claude` | `claude` |
 
 未接入模型也写预期的 provider 类型，后续只需补对应 Provider 类。
@@ -409,7 +409,7 @@ UI 默认打开最近会话，允许用户：
 ### 阶段一：GPT-5.4 接入
 
 内容：
-- `gpt54` 接入
+- `gpt5.4` 接入
 - `model_pricing.provider` 标准化
 - `model_pricing` 新增 `upstream_model_name`、`is_runnable`
 - registry 改为数据库驱动
@@ -421,7 +421,7 @@ UI 默认打开最近会话，允许用户：
 
 交付标准：
 - `gemini` 继续可用
-- `gpt54` 可选且能生成共享报告
+- `gpt5.4` 可选且能生成共享报告
 - 不可运行模型不进入用户主路径
 
 ### 阶段二：个性化报告
@@ -498,7 +498,7 @@ UI 默认打开最近会话，允许用户：
 ## 十三、实施注意事项
 
 1. `provider` 字段语义必须从第一阶段开始统一，避免后续重复迁移。
-2. `gpt54` 的 `model_id` 与上游 `gpt-5.4` 必须保持解耦。
+2. `gpt5.4` 的 `model_id` 与上游 `gpt-5.4` 必须保持解耦。
 3. 任何用户可见模型都必须满足 `is_runnable = 1`。
 4. provider 失败时必须留下足够的追踪信息，便于排查自建 `sub2api` 问题。
 5. 第二阶段之前，不允许把个性化逻辑偷偷塞回共享 prompt。

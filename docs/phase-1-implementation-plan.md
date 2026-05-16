@@ -5,7 +5,7 @@
 本文档用于把 [design-final-decision.md](/Users/james/Documents/dev/projects/dingpan/docs/design-final-decision.md) 中的第一阶段决议拆成可执行任务。
 
 范围只包含：
-- `gpt54` 接入
+- `gpt5.4` 接入
 - 模型目录与 provider 路由重构
 - `analysis_cache` 追踪字段
 - 前端模型可见范围收紧
@@ -24,7 +24,7 @@
 交付后系统应满足：
 
 1. `gemini` 继续可用。
-2. `gpt54` 成为真正可运行的模型选项。
+2. `gpt5.4` 成为真正可运行的模型选项。
 3. 前端只展示可运行模型。
 4. 报告生成链路按 `model_id` 正确路由到对应 provider。
 5. `analysis_cache` 能记录实际使用的 provider、模型名、请求追踪 ID。
@@ -63,13 +63,13 @@
 | `deepseek` | `deepseek` | `DeepSeek` | `NULL` | 1 | 0 | 0 | 2 |
 | `qwen` | `qwen` | `通义千问` | `NULL` | 1 | 0 | 0 | 3 |
 | `glm` | `glm` | `GLM` | `NULL` | 2 | 0 | 0 | 4 |
-| `gpt54` | `openai` | `GPT-5.4` | `gpt-5.4` | 3 | 1 | 1 | 5 |
+| `gpt5.4` | `openai` | `GPT-5.4` | `gpt-5.4` | 3 | 1 | 1 | 5 |
 | `claude` | `claude` | `Claude` | `NULL` | 3 | 0 | 0 | 6 |
 
 验收标准：
 - 新库初始化后表结构正确
 - 老库启动后能自动补齐新增字段
-- `model_pricing` 中只存在 `gemini` 和 `gpt54` 两个用户可见且可运行模型
+- `model_pricing` 中只存在 `gemini` 和 `gpt5.4` 两个用户可见且可运行模型
 
 ---
 
@@ -103,7 +103,7 @@
 
 验收标准：
 - `load_settings()` 能稳定读到 OpenAI 配置
-- 缺失 OpenAI 配置时，仅在运行 `gpt54` 时失败，不影响 `gemini`
+- 缺失 OpenAI 配置时，仅在运行 `gpt5.4` 时失败，不影响 `gemini`
 
 ---
 
@@ -140,7 +140,7 @@
 
 目标：
 - 接入自建 `sub2api`
-- 支持 `gpt54` 生成完整共享报告
+- 支持 `gpt5.4` 生成完整共享报告
 
 涉及文件：
 - `src/providers/openai.py` 新建
@@ -162,7 +162,7 @@
 - 如决定不用 SDK 而直接走 HTTP，请保持 provider 层封装，不把 HTTP 细节泄露到业务层
 
 验收标准：
-- `gpt54` 能返回可 `json.loads()` 的纯 JSON 文本
+- `gpt5.4` 能返回可 `json.loads()` 的纯 JSON 文本
 - provider 能带出 `actual_provider=openai`
 - provider 能记录 `actual_model_name=gpt-5.4`
 - 若上游返回响应 ID，能写入 `provider_response_id`
@@ -198,7 +198,7 @@
 - provider 未实现：`Provider not implemented`
 
 验收标准：
-- `gemini` 和 `gpt54` 都能通过同一入口拿到 provider
+- `gemini` 和 `gpt5.4` 都能通过同一入口拿到 provider
 - registry 不再依赖硬编码的模型分支
 
 ---
@@ -262,7 +262,7 @@
 
 验收标准：
 - `generate.py` 跑 `gemini` 不回归
-- `generate.py --model gpt54` 能生成并写库
+- `generate.py --model gpt5.4` 能生成并写库
 - 失败记录能带足排查信息
 
 ---
@@ -293,7 +293,7 @@ ORDER BY sort_order ASC, model_id ASC
   - 更新默认模型接口校验
 
 验收标准：
-- 前端只显示 `gemini`、`gpt54`
+- 前端只显示 `gemini`、`gpt5.4`
 - 用户无法将默认模型或订阅模型设置为不可运行模型
 
 ---
@@ -331,7 +331,7 @@ ORDER BY sort_order ASC, model_id ASC
 ## 任务 10：文档与运行说明收尾
 
 目标：
-- 保证后续开发和部署知道如何启用 `gpt54`
+- 保证后续开发和部署知道如何启用 `gpt5.4`
 
 涉及文件：
 - [README.md](/Users/james/Documents/dev/projects/dingpan/README.md)
@@ -347,11 +347,11 @@ ORDER BY sort_order ASC, model_id ASC
 
 ```bash
 python generate.py --model gemini --limit 1 --dry-run
-python generate.py --model gpt54 --limit 1 --dry-run
+python generate.py --model gpt5.4 --limit 1 --dry-run
 ```
 
 验收标准：
-- 新人只看 README 就能理解如何启用 `gpt54`
+- 新人只看 README 就能理解如何启用 `gpt5.4`
 
 ---
 
@@ -390,8 +390,8 @@ python generate.py --model gpt54 --limit 1 --dry-run
 
 ## 4.2 模型目录验证
 
-- Dashboard 模型下拉只显示 `gemini`、`gpt54`
-- Settings 默认模型选择器只显示 `gemini`、`gpt54`
+- Dashboard 模型下拉只显示 `gemini`、`gpt5.4`
+- Settings 默认模型选择器只显示 `gemini`、`gpt5.4`
 - API 拒绝选择不可运行模型
 
 ## 4.3 Gemini 回归验证
@@ -402,7 +402,7 @@ python generate.py --model gpt54 --limit 1 --dry-run
 
 ## 4.4 GPT-5.4 验证
 
-- `python generate.py --model gpt54 --limit 1 --dry-run`
+- `python generate.py --model gpt5.4 --limit 1 --dry-run`
 - 能通过 sub2api 生成结果
 - 输出是合法 JSON
 - 写库记录包含：
@@ -411,7 +411,7 @@ python generate.py --model gpt54 --limit 1 --dry-run
 
 ## 4.5 失败路径验证
 
-- 刻意不给 `OPENAI_API_KEY` 时运行 `gpt54`
+- 刻意不给 `OPENAI_API_KEY` 时运行 `gpt5.4`
 - 确认写入 `failed`
 - 报告页展示“当前模型分析暂时不可用”
 - `gemini` 路径不受影响
@@ -439,7 +439,7 @@ python generate.py --model gpt54 --limit 1 --dry-run
 
 1. 生产数据库可兼容迁移。
 2. `gemini` 无回归。
-3. `gpt54` 可从前端选择并进入生成链路。
+3. `gpt5.4` 可从前端选择并进入生成链路。
 4. `generate.py` 能按 `model_id` 路由 provider。
 5. `analysis_cache` 追踪字段落库。
 6. 报告页空态语义清晰。
