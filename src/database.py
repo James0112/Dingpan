@@ -249,18 +249,13 @@ async def _ensure_schema_migrations(conn: aiosqlite.Connection) -> None:
         await conn.execute("ALTER TABLE personalized_analysis ADD COLUMN actual_model_name TEXT NOT NULL DEFAULT ''")
     if not await _column_exists(conn, "personalized_analysis", "provider_response_id"):
         await conn.execute("ALTER TABLE personalized_analysis ADD COLUMN provider_response_id TEXT NOT NULL DEFAULT ''")
-    await conn.execute("UPDATE users SET preferred_model = 'gpt5.4' WHERE preferred_model = 'gpt4'")
     await conn.execute("UPDATE users SET preferred_model = 'gpt5.4' WHERE preferred_model = 'gpt54'")
     await conn.execute("UPDATE users SET preferred_model = 'glm' WHERE preferred_model = 'glm4'")
-    await conn.execute("UPDATE subscriptions SET model_id = 'gpt5.4' WHERE model_id = 'gpt4'")
     await conn.execute("UPDATE subscriptions SET model_id = 'gpt5.4' WHERE model_id = 'gpt54'")
     await conn.execute("UPDATE subscriptions SET model_id = 'glm' WHERE model_id = 'glm4'")
-    await conn.execute("UPDATE analysis_cache SET model_id = 'gpt5.4' WHERE model_id = 'gpt4'")
     await conn.execute("UPDATE analysis_cache SET model_id = 'gpt5.4' WHERE model_id = 'gpt54'")
     await conn.execute("UPDATE analysis_cache SET model_id = 'glm' WHERE model_id = 'glm4'")
-    await conn.execute("UPDATE personalized_analysis SET model_id = 'gpt5.4' WHERE model_id = 'gpt4'")
     await conn.execute("UPDATE personalized_analysis SET model_id = 'gpt5.4' WHERE model_id = 'gpt54'")
-    await conn.execute("UPDATE usage_log SET model_id = 'gpt5.4' WHERE model_id = 'gpt4'")
     await conn.execute("UPDATE usage_log SET model_id = 'gpt5.4' WHERE model_id = 'gpt54'")
     await conn.execute("UPDATE usage_log SET model_id = 'glm' WHERE model_id = 'glm4'")
 

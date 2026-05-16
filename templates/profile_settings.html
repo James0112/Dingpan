@@ -37,6 +37,150 @@
   .profile-message {
     min-height: 22px;
   }
+  .profile-choice {
+    position: relative;
+  }
+  .profile-choice-input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .profile-choice-trigger {
+    width: 100%;
+    min-height: 56px;
+    padding: 15px 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 18px;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    text-align: left;
+    box-shadow: var(--shadow-soft);
+  }
+  .profile-choice-trigger.is-open {
+    border-color: rgba(59, 130, 246, 0.35);
+  }
+  .profile-choice-value {
+    font-size: 17px;
+    font-weight: 700;
+  }
+  .profile-choice-caret {
+    color: var(--text-secondary);
+    font-size: 18px;
+    transition: transform 160ms ease;
+  }
+  .profile-choice-trigger.is-open .profile-choice-caret {
+    transform: rotate(180deg);
+  }
+  .profile-choice-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 75;
+    background: rgba(15, 23, 42, 0.32);
+    backdrop-filter: blur(6px);
+  }
+  .profile-choice-backdrop[hidden] {
+    display: none;
+  }
+  .profile-choice-menu {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 0;
+    right: 0;
+    z-index: 80;
+    display: grid;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    background: var(--bg-surface);
+    box-shadow: var(--shadow-soft);
+  }
+  .profile-choice-menu[hidden] {
+    display: none;
+  }
+  .profile-choice-menu-head {
+    display: none;
+  }
+  .profile-choice-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    border: 1px solid transparent;
+    border-radius: 16px;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    text-align: left;
+  }
+  .profile-choice-option.is-active {
+    border-color: rgba(59, 130, 246, 0.28);
+    background: rgba(59, 130, 246, 0.10);
+  }
+  .profile-choice-option-copy {
+    display: grid;
+    gap: 4px;
+  }
+  .profile-choice-option-title {
+    font-size: 16px;
+    font-weight: 800;
+  }
+  .profile-choice-option-desc {
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .profile-choice-check {
+    opacity: 0;
+    color: var(--color-primary);
+    font-weight: 800;
+  }
+  .profile-choice-option.is-active .profile-choice-check {
+    opacity: 1;
+  }
+  body.profile-choice-open {
+    overflow: hidden;
+  }
+  @media (max-width: 640px) {
+    .profile-choice-menu {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: calc(12px + var(--safe-area-bottom));
+      top: auto;
+      max-height: min(68vh, 520px);
+      padding: 12px;
+      border-radius: 24px;
+      overflow: hidden;
+    }
+    .profile-choice-menu-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 4px 4px 12px;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 8px;
+    }
+    .profile-choice-menu-title {
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .profile-choice-list {
+      max-height: calc(min(68vh, 520px) - 72px);
+      overflow: auto;
+      display: grid;
+      gap: 8px;
+      padding-right: 2px;
+      padding-bottom: calc(18px + var(--safe-area-bottom));
+      -webkit-overflow-scrolling: touch;
+    }
+  }
 </style>
 
 <div class="profile-shell">
@@ -53,22 +197,98 @@
   <form class="profile-card stack" id="profile-form">
     <div class="field">
       <label for="risk_preference">风险偏好</label>
-      <select id="risk_preference" name="risk_preference">
-        <option value="" {% if not profile.risk_preference %}selected{% endif %}>未设置</option>
-        <option value="保守" {% if profile.risk_preference == "保守" %}selected{% endif %}>保守</option>
-        <option value="稳健" {% if profile.risk_preference == "稳健" %}selected{% endif %}>稳健</option>
-        <option value="激进" {% if profile.risk_preference == "激进" %}selected{% endif %}>激进</option>
-      </select>
+      <div class="profile-choice" data-choice data-choice-title="风险偏好">
+        <input type="hidden" id="risk_preference" name="risk_preference" class="profile-choice-input" value="{{ profile.risk_preference }}">
+        <div class="profile-choice-backdrop" data-choice-backdrop hidden></div>
+        <button class="profile-choice-trigger" type="button" data-choice-trigger aria-expanded="false">
+          <span class="profile-choice-value" data-choice-value>{% if profile.risk_preference %}{{ profile.risk_preference }}{% else %}未设置{% endif %}</span>
+          <span class="profile-choice-caret" aria-hidden="true">⌄</span>
+        </button>
+        <div class="profile-choice-menu" data-choice-menu hidden>
+          <div class="profile-choice-menu-head">
+            <div class="profile-choice-menu-title">风险偏好</div>
+            <button class="secondary" type="button" data-choice-close>关闭</button>
+          </div>
+          <div class="profile-choice-list">
+            <button class="profile-choice-option{% if not profile.risk_preference %} is-active{% endif %}" type="button" data-choice-option data-value="" data-label="未设置">
+              <span class="profile-choice-option-copy">
+                <span class="profile-choice-option-title">未设置</span>
+                <span class="profile-choice-option-desc">先保持空白，后续再补充。</span>
+              </span>
+              <span class="profile-choice-check" aria-hidden="true">✓</span>
+            </button>
+            <button class="profile-choice-option{% if profile.risk_preference == '保守' %} is-active{% endif %}" type="button" data-choice-option data-value="保守" data-label="保守">
+              <span class="profile-choice-option-copy">
+                <span class="profile-choice-option-title">保守</span>
+                <span class="profile-choice-option-desc">更重视回撤控制和防守。</span>
+              </span>
+              <span class="profile-choice-check" aria-hidden="true">✓</span>
+            </button>
+            <button class="profile-choice-option{% if profile.risk_preference == '稳健' %} is-active{% endif %}" type="button" data-choice-option data-value="稳健" data-label="稳健">
+              <span class="profile-choice-option-copy">
+                <span class="profile-choice-option-title">稳健</span>
+                <span class="profile-choice-option-desc">接受波动，但先保住已有利润。</span>
+              </span>
+              <span class="profile-choice-check" aria-hidden="true">✓</span>
+            </button>
+            <button class="profile-choice-option{% if profile.risk_preference == '激进' %} is-active{% endif %}" type="button" data-choice-option data-value="激进" data-label="激进">
+              <span class="profile-choice-option-copy">
+                <span class="profile-choice-option-title">激进</span>
+                <span class="profile-choice-option-desc">愿意承担更大波动换取更高弹性。</span>
+              </span>
+              <span class="profile-choice-check" aria-hidden="true">✓</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="field">
       <label for="trading_style">交易风格</label>
-      <select id="trading_style" name="trading_style">
-        <option value="" {% if not profile.trading_style %}selected{% endif %}>未设置</option>
-        <option value="超短线" {% if profile.trading_style == "超短线" %}selected{% endif %}>超短线</option>
-        <option value="短线" {% if profile.trading_style == "短线" %}selected{% endif %}>短线</option>
-        <option value="中线" {% if profile.trading_style == "中线" %}selected{% endif %}>中线</option>
-      </select>
+      <div class="profile-choice" data-choice data-choice-title="交易风格">
+        <input type="hidden" id="trading_style" name="trading_style" class="profile-choice-input" value="{{ profile.trading_style }}">
+        <div class="profile-choice-backdrop" data-choice-backdrop hidden></div>
+        <button class="profile-choice-trigger" type="button" data-choice-trigger aria-expanded="false">
+          <span class="profile-choice-value" data-choice-value>{% if profile.trading_style %}{{ profile.trading_style }}{% else %}未设置{% endif %}</span>
+          <span class="profile-choice-caret" aria-hidden="true">⌄</span>
+        </button>
+        <div class="profile-choice-menu" data-choice-menu hidden>
+          <div class="profile-choice-menu-head">
+            <div class="profile-choice-menu-title">交易风格</div>
+            <button class="secondary" type="button" data-choice-close>关闭</button>
+          </div>
+          <div class="profile-choice-list">
+            <button class="profile-choice-option{% if not profile.trading_style %} is-active{% endif %}" type="button" data-choice-option data-value="" data-label="未设置">
+              <span class="profile-choice-option-copy">
+                <span class="profile-choice-option-title">未设置</span>
+                <span class="profile-choice-option-desc">先不定义时间维度。</span>
+              </span>
+              <span class="profile-choice-check" aria-hidden="true">✓</span>
+            </button>
+            <button class="profile-choice-option{% if profile.trading_style == '超短线' %} is-active{% endif %}" type="button" data-choice-option data-value="超短线" data-label="超短线">
+              <span class="profile-choice-option-copy">
+                <span class="profile-choice-option-title">超短线</span>
+                <span class="profile-choice-option-desc">更关注当日强弱和隔日反馈。</span>
+              </span>
+              <span class="profile-choice-check" aria-hidden="true">✓</span>
+            </button>
+            <button class="profile-choice-option{% if profile.trading_style == '短线' %} is-active{% endif %}" type="button" data-choice-option data-value="短线" data-label="短线">
+              <span class="profile-choice-option-copy">
+                <span class="profile-choice-option-title">短线</span>
+                <span class="profile-choice-option-desc">关注几日到两三周内的节奏。</span>
+              </span>
+              <span class="profile-choice-check" aria-hidden="true">✓</span>
+            </button>
+            <button class="profile-choice-option{% if profile.trading_style == '中线' %} is-active{% endif %}" type="button" data-choice-option data-value="中线" data-label="中线">
+              <span class="profile-choice-option-copy">
+                <span class="profile-choice-option-title">中线</span>
+                <span class="profile-choice-option-desc">更重视趋势延续和结构位置。</span>
+              </span>
+              <span class="profile-choice-check" aria-hidden="true">✓</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="field">
@@ -106,6 +326,87 @@
   const profileForm = document.getElementById("profile-form");
   const profileMessage = document.getElementById("profile-message");
   const profileMeta = document.getElementById("profile-meta");
+
+  function closeChoice(choice) {
+    const trigger = choice.querySelector("[data-choice-trigger]");
+    const menu = choice.querySelector("[data-choice-menu]");
+    const backdrop = choice.querySelector("[data-choice-backdrop]");
+    if (!trigger || !menu || !backdrop) {
+      return;
+    }
+    trigger.classList.remove("is-open");
+    trigger.setAttribute("aria-expanded", "false");
+    menu.hidden = true;
+    backdrop.hidden = true;
+    document.body.classList.remove("profile-choice-open");
+  }
+
+  function openChoice(choice) {
+    document.querySelectorAll("[data-choice]").forEach((item) => {
+      if (item !== choice) {
+        closeChoice(item);
+      }
+    });
+    const trigger = choice.querySelector("[data-choice-trigger]");
+    const menu = choice.querySelector("[data-choice-menu]");
+    const backdrop = choice.querySelector("[data-choice-backdrop]");
+    if (!trigger || !menu || !backdrop) {
+      return;
+    }
+    trigger.classList.add("is-open");
+    trigger.setAttribute("aria-expanded", "true");
+    menu.hidden = false;
+    backdrop.hidden = false;
+    document.body.classList.add("profile-choice-open");
+  }
+
+  document.querySelectorAll("[data-choice]").forEach((choice) => {
+    const trigger = choice.querySelector("[data-choice-trigger]");
+    const menu = choice.querySelector("[data-choice-menu]");
+    const valueInput = choice.querySelector(".profile-choice-input");
+    const valueLabel = choice.querySelector("[data-choice-value]");
+    const backdrop = choice.querySelector("[data-choice-backdrop]");
+    const closeButton = choice.querySelector("[data-choice-close]");
+
+    if (trigger && menu) {
+      trigger.addEventListener("click", () => {
+        if (menu.hidden) {
+          openChoice(choice);
+        } else {
+          closeChoice(choice);
+        }
+      });
+    }
+
+    if (backdrop) {
+      backdrop.addEventListener("click", () => {
+        closeChoice(choice);
+      });
+    }
+
+    if (closeButton) {
+      closeButton.addEventListener("click", () => {
+        closeChoice(choice);
+      });
+    }
+
+    document.querySelectorAll("[data-choice-option]", choice).forEach((option) => {
+      option.addEventListener("click", () => {
+        const nextValue = option.dataset.value || "";
+        const nextLabel = option.dataset.label || "未设置";
+        if (valueInput) {
+          valueInput.value = nextValue;
+        }
+        if (valueLabel) {
+          valueLabel.textContent = nextLabel;
+        }
+        document.querySelectorAll("[data-choice-option]", choice).forEach((item) => {
+          item.classList.toggle("is-active", item === option);
+        });
+        closeChoice(choice);
+      });
+    });
+  });
 
   if (profileForm) {
     profileForm.addEventListener("submit", async (event) => {
