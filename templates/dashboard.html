@@ -324,6 +324,15 @@
               {% endif %}
               <span class="pill">成本 ¥{{ '%.2f'|format(item.cost_price) }}</span>
             </div>
+            <div class="metric-row" style="margin-top:14px;">
+              <span class="pill {% if item.personalized_state == 'ready' %}trend-up{% elif item.personalized_state == 'failed' %}trend-down{% else %}trend-flat{% endif %}">
+                {{ item.personalized_status_label }}
+              </span>
+              {% if item.profile_summary %}
+              <span class="pill">{{ item.profile_summary }}</span>
+              {% endif %}
+            </div>
+            <p class="muted" style="margin:0;line-height:1.7;">{{ item.personalized_status_copy }}</p>
             <p class="muted" style="margin:0;line-height:1.8;">{{ item.latest_summary }}</p>
             <div class="row" style="justify-content:space-between;align-items:center;">
               <div class="muted">最新报告：{{ item.latest_trade_date }}</div>
@@ -335,6 +344,13 @@
             </div>
             {% else %}
             <p class="muted" style="margin:0;line-height:1.8;">暂无共享分析缓存，系统生成后这里会显示最新摘要。</p>
+            <div class="metric-row" style="margin-top:14px;">
+              <span class="pill trend-flat">{{ item.personalized_status_label }}</span>
+              {% if item.profile_summary %}
+              <span class="pill">{{ item.profile_summary }}</span>
+              {% endif %}
+            </div>
+            <p class="muted" style="margin:0;line-height:1.7;">{{ item.personalized_status_copy }}</p>
             <div class="row" style="justify-content:flex-end;">
               <span class="pill">成本 ¥{{ '%.2f'|format(item.cost_price) }}</span>
             </div>

@@ -579,6 +579,29 @@ def _generate_personalized_analysis_for_user_sync(
         )
 
 
+def _profile_summary_text(profile: UserProfile) -> str:
+    parts: list[str] = []
+    if profile.risk_preference:
+        parts.append(profile.risk_preference)
+    if profile.trading_style:
+        parts.append(profile.trading_style)
+    if profile.focus_sectors:
+        parts.append(" / ".join(profile.focus_sectors[:3]))
+    return " · ".join(parts)
+
+
+def _personalized_dashboard_status(state: str) -> tuple[str, str]:
+    if state == "ready":
+        return ("个性化已就绪", "已合并你的投资画像与持仓成本。")
+    if state == "failed":
+        return ("个性化生成失败", "可以进入报告页重试，或先修改画像。")
+    if state == "stale":
+        return ("画像已更新", "当前个性化建议需要按最新画像重新生成。")
+    if state == "generating":
+        return ("个性化生成中", "共享分析可先查看，个性化建议稍后补齐。")
+    return ("等待个性化生成", "已有共享分析，首次个性化建议会自动生成。")
+
+
 async def _load_personalized_analysis_state(
     *,
     user_id: int,
@@ -1071,6 +1094,8 @@ async def verify_email_page(request: Request, token: str = ""):
 async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
     if user is None:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    profile = await _load_user_profile(user.id)
+    profile_summary = _profile_summary_text(profile)
     subscription_rows = await fetch_all(
         settings.db_path,
         """
@@ -1113,10 +1138,22 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
         if row["market_data_json"] and row["analysis_json"]:
             market_data = market_data_from_json(str(row["market_data_json"]))
             analysis = analysis_result_from_json(str(row["analysis_json"]))
+            personalized_state = await _load_personalized_analysis_state(
+                user_id=user.id,
+                stock_code=str(row["stock_code"]),
+                trade_date=str(row["latest_trade_date"]),
+                model_id=str(row["model_id"]),
+                profile=profile,
+            )
+            status_label, status_copy = _personalized_dashboard_status(str(personalized_state["state"]))
             item["latest_close_price"] = market_data.snapshot.close_price
             item["latest_change_pct"] = market_data.snapshot.change_pct
             item["latest_summary"] = analysis.executive_summary
             item["latest_trade_date"] = str(row["latest_trade_date"])
+            item["personalized_state"] = str(personalized_state["state"])
+            item["personalized_status_label"] = status_label
+            item["personalized_status_copy"] = status_copy
+            item["profile_summary"] = profile_summary
             if float(row["cost_price"]) > 0:
                 item["latest_pnl_pct"] = ((market_data.snapshot.close_price - float(row["cost_price"])) / float(row["cost_price"])) * 100
             else:
@@ -1126,6 +1163,10 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
             item["latest_change_pct"] = None
             item["latest_summary"] = ""
             item["latest_pnl_pct"] = None
+            item["personalized_state"] = "waiting_shared"
+            item["personalized_status_label"] = "等待共享分析"
+            item["personalized_status_copy"] = "共享分析生成后，这里会继续补个性化建议状态。"
+            item["profile_summary"] = profile_summary
         subscriptions.append(item)
     models = await fetch_all(
         settings.db_path,
