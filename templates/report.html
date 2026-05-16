@@ -215,6 +215,17 @@
     color: var(--text-secondary);
     line-height: 1.7;
   }
+  .report-status-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .report-status-note {
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.7;
+  }
 </style>
 
 <div class="report-shell">
@@ -266,9 +277,12 @@
   <section class="report-status" id="personalized-status-panel" data-personalized-state="{{ personalized_state }}">
     <div class="report-status-head">
       <div class="pill">个性化建议状态</div>
-      {% if personalized_state == "failed" %}
-      <button class="button secondary" type="button" id="personalized-retry-button">重新生成</button>
-      {% endif %}
+      <div class="report-status-actions">
+        {% if personalized_state == "failed" %}
+        <button class="button secondary" type="button" id="personalized-retry-button">重新生成</button>
+        {% endif %}
+        <a class="button secondary" href="/settings/profile">编辑画像</a>
+      </div>
     </div>
     <div class="report-status-copy" id="personalized-status-copy">
       {% if personalized_state == "ready" %}
@@ -279,6 +293,19 @@
       正在基于你的投资画像与当前持仓生成个性化建议。共享分析已可查看，页面会自动刷新状态。
       {% endif %}
     </div>
+    {% if personalized_state == "ready" %}
+    <div class="report-status-note">
+      当前画像：{{ profile.risk_preference or "未设风险偏好" }} · {{ profile.trading_style or "未设交易风格" }}{% if profile.focus_sectors %} · {{ profile.focus_sectors[:3]|join(" / ") }}{% endif %}
+    </div>
+    {% elif personalized_state == "failed" %}
+    <div class="report-status-note">
+      可以先修改画像再重新生成；如果画像不需要调整，也可以直接点“重新生成”再试一次。
+    </div>
+    {% else %}
+    <div class="report-status-note">
+      如果刚改过画像，这一轮会按最新 `context_version` 重新生成。
+    </div>
+    {% endif %}
   </section>
 
   <div class="grid two">

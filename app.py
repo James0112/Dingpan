@@ -1342,6 +1342,7 @@ async def report_page(
 async def settings_page(request: Request, user=Depends(page_user_or_redirect)):
     if user is None:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    profile = await _load_user_profile(user.id)
     models = await fetch_all(
         settings.db_path,
         """
@@ -1354,7 +1355,7 @@ async def settings_page(request: Request, user=Depends(page_user_or_redirect)):
     return templates.TemplateResponse(
         request,
         "settings_placeholder.html",
-        _template_context(request, title="我的", user=user, models=models),
+        _template_context(request, title="我的", user=user, models=models, profile=profile),
     )
 
 

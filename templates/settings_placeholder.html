@@ -145,6 +145,33 @@
     line-height: 1.7;
     min-height: 20px;
   }
+  .profile-summary {
+    display: grid;
+    gap: 10px;
+    margin-top: 4px;
+  }
+  .profile-chip-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .profile-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .profile-snippet {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.7;
+  }
   .model-select {
     position: relative;
   }
@@ -452,7 +479,34 @@
         </div>
         <a class="button secondary" href="/settings/profile">编辑画像</a>
       </div>
-      <div class="settings-meta">当前阶段只支持手动编辑，暂不做 AI 自动写入。</div>
+      <div class="profile-summary">
+        <div class="profile-chip-row">
+          <span class="profile-chip">风险：{{ profile.risk_preference or "未设置" }}</span>
+          <span class="profile-chip">风格：{{ profile.trading_style or "未设置" }}</span>
+          <span class="profile-chip">版本：{{ profile.context_version }}</span>
+        </div>
+        {% if profile.focus_sectors %}
+        <div class="profile-chip-row">
+          {% for sector in profile.focus_sectors[:4] %}
+          <span class="profile-chip">{{ sector }}</span>
+          {% endfor %}
+          {% if profile.focus_sectors|length > 4 %}
+          <span class="profile-chip">+{{ profile.focus_sectors|length - 4 }}</span>
+          {% endif %}
+        </div>
+        {% endif %}
+        {% if profile.position_notes %}
+        <div class="profile-snippet">持仓备注：{{ profile.position_notes[:60] }}{% if profile.position_notes|length > 60 %}...{% endif %}</div>
+        {% endif %}
+        {% if profile.custom_notes %}
+        <div class="profile-snippet">其他补充：{{ profile.custom_notes[:60] }}{% if profile.custom_notes|length > 60 %}...{% endif %}</div>
+        {% endif %}
+        {% if not profile.risk_preference and not profile.trading_style and not profile.focus_sectors and not profile.position_notes and not profile.custom_notes %}
+        <div class="settings-meta">当前画像还是空白，建议先补风险偏好和交易风格，报告会更贴近你的持仓处理方式。</div>
+        {% else %}
+        <div class="settings-meta">当前阶段只支持手动编辑，暂不做 AI 自动写入。</div>
+        {% endif %}
+      </div>
     </article>
   </section>
 
