@@ -334,6 +334,21 @@
             </div>
             <p class="muted" style="margin:0;line-height:1.7;">{{ item.personalized_status_copy }}</p>
             <p class="muted" style="margin:0;line-height:1.6;">{{ item.personalized_version_note }}</p>
+            {% if is_verified and item.latest_trade_date and item.personalized_state in ["stale", "failed"] %}
+            <div class="row" style="gap:12px;justify-content:flex-start;">
+              {% if item.personalized_state == "stale" %}
+              <button
+                class="button secondary personalized-regenerate-button"
+                type="button"
+                data-stock-code="{{ item.stock_code }}"
+                data-trade-date="{{ item.latest_trade_date }}"
+              >
+                重新生成
+              </button>
+              {% endif %}
+              <a class="button secondary" href="/settings/profile">编辑画像</a>
+            </div>
+            {% endif %}
             <p class="muted" style="margin:0;line-height:1.8;">{{ item.latest_summary }}</p>
             <div class="row" style="justify-content:space-between;align-items:center;">
               <div class="muted">最新报告：{{ item.latest_trade_date }}</div>
@@ -517,6 +532,27 @@
       if (response.ok) {
         window.location.reload();
       }
+    });
+  });
+
+  document.querySelectorAll(".personalized-regenerate-button").forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = "生成中...";
+      const response = await fetch(`/api/report/${button.dataset.stockCode}/${button.dataset.tradeDate}/personalized-generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        button.disabled = false;
+        button.textContent = data.detail || "重新生成失败";
+        window.setTimeout(() => {
+          button.textContent = "重新生成";
+        }, 1500);
+        return;
+      }
+      window.location.reload();
     });
   });
 
