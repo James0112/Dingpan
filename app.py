@@ -428,6 +428,16 @@ def _upsert_personalized_analysis_sync(
 ) -> None:
     conn = sqlite3.connect(settings.db_path)
     try:
+        payload = (
+            status_value,
+            error_message,
+            result_json,
+            context_snapshot_json,
+            context_version,
+            actual_provider,
+            actual_model_name,
+            provider_response_id,
+        )
         cursor = conn.execute(
             """
             UPDATE personalized_analysis
@@ -443,15 +453,8 @@ def _upsert_personalized_analysis_sync(
                 created_at = CURRENT_TIMESTAMP
             WHERE user_id = ? AND stock_code = ? AND trade_date = ? AND model_id = ?
             """,
-            (
-                status_value,
-                error_message,
-                result_json,
-                context_snapshot_json,
-                context_version,
-                actual_provider,
-                actual_model_name,
-                provider_response_id,
+            payload
+            + (
                 user_id,
                 stock_code,
                 trade_date,
@@ -459,30 +462,63 @@ def _upsert_personalized_analysis_sync(
             ),
         )
         if cursor.rowcount == 0:
-            conn.execute(
-                """
-                INSERT INTO personalized_analysis (
-                    user_id, stock_code, trade_date, model_id, status, error_message,
-                    result_json, context_snapshot_json, context_version, points_consumed,
-                    actual_provider, actual_model_name, provider_response_id, created_at
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO personalized_analysis (
+                        user_id, stock_code, trade_date, model_id, status, error_message,
+                        result_json, context_snapshot_json, context_version, points_consumed,
+                        actual_provider, actual_model_name, provider_response_id, created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """,
+                    (
+                        user_id,
+                        stock_code,
+                        trade_date,
+                        model_id,
+                        status_value,
+                        error_message,
+                        result_json,
+                        context_snapshot_json,
+                        context_version,
+                        actual_provider,
+                        actual_model_name,
+                        provider_response_id,
+                    ),
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, CURRENT_TIMESTAMP)
-                """,
-                (
-                    user_id,
-                    stock_code,
-                    trade_date,
-                    model_id,
-                    status_value,
-                    error_message,
-                    result_json,
-                    context_snapshot_json,
-                    context_version,
-                    actual_provider,
-                    actual_model_name,
-                    provider_response_id,
-                ),
-            )
+            except sqlite3.IntegrityError:
+                conn.execute(
+                    """
+                    UPDATE personalized_analysis
+                    SET
+                        model_id = ?,
+                        status = ?,
+                        error_message = ?,
+                        result_json = ?,
+                        context_snapshot_json = ?,
+                        context_version = ?,
+                        actual_provider = ?,
+                        actual_model_name = ?,
+                        provider_response_id = ?,
+                        created_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ? AND stock_code = ? AND trade_date = ?
+                    """,
+                    (
+                        model_id,
+                        status_value,
+                        error_message,
+                        result_json,
+                        context_snapshot_json,
+                        context_version,
+                        actual_provider,
+                        actual_model_name,
+                        provider_response_id,
+                        user_id,
+                        stock_code,
+                        trade_date,
+                    ),
+                )
         conn.commit()
     finally:
         conn.close()
@@ -650,6 +686,7 @@ async def _queue_personalized_generation(
 ) -> None:
     conn = await connect(settings.db_path)
     try:
+        context_snapshot_json = user_profile_to_json(profile)
         cursor = await conn.execute(
             """
             UPDATE personalized_analysis
@@ -666,7 +703,7 @@ async def _queue_personalized_generation(
             WHERE user_id = ? AND stock_code = ? AND trade_date = ? AND model_id = ?
             """,
             (
-                user_profile_to_json(profile),
+                context_snapshot_json,
                 profile.context_version,
                 user_id,
                 stock_code,
@@ -675,24 +712,51 @@ async def _queue_personalized_generation(
             ),
         )
         if cursor.rowcount == 0:
-            await conn.execute(
-                """
-                INSERT INTO personalized_analysis (
-                    user_id, stock_code, trade_date, model_id, status, error_message,
-                    result_json, context_snapshot_json, context_version, points_consumed,
-                    actual_provider, actual_model_name, provider_response_id, created_at
+            try:
+                await conn.execute(
+                    """
+                    INSERT INTO personalized_analysis (
+                        user_id, stock_code, trade_date, model_id, status, error_message,
+                        result_json, context_snapshot_json, context_version, points_consumed,
+                        actual_provider, actual_model_name, provider_response_id, created_at
+                    )
+                    VALUES (?, ?, ?, ?, 'pending', '', '', ?, ?, 0, '', '', '', CURRENT_TIMESTAMP)
+                    """,
+                    (
+                        user_id,
+                        stock_code,
+                        trade_date,
+                        model_id,
+                        context_snapshot_json,
+                        profile.context_version,
+                    ),
                 )
-                VALUES (?, ?, ?, ?, 'pending', '', '', ?, ?, 0, '', '', '', CURRENT_TIMESTAMP)
-                """,
-                (
-                    user_id,
-                    stock_code,
-                    trade_date,
-                    model_id,
-                    user_profile_to_json(profile),
-                    profile.context_version,
-                ),
-            )
+            except sqlite3.IntegrityError:
+                await conn.execute(
+                    """
+                    UPDATE personalized_analysis
+                    SET
+                        model_id = ?,
+                        status = 'pending',
+                        error_message = '',
+                        result_json = '',
+                        context_snapshot_json = ?,
+                        context_version = ?,
+                        actual_provider = '',
+                        actual_model_name = '',
+                        provider_response_id = '',
+                        created_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ? AND stock_code = ? AND trade_date = ?
+                    """,
+                    (
+                        model_id,
+                        context_snapshot_json,
+                        profile.context_version,
+                        user_id,
+                        stock_code,
+                        trade_date,
+                    ),
+                )
         await conn.commit()
     finally:
         await conn.close()
