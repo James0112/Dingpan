@@ -117,6 +117,30 @@ SCHEMA_STATEMENTS = (
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS conversations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        model_id TEXT NOT NULL,
+        conversation_type TEXT NOT NULL DEFAULT 'general',
+        stock_code TEXT NOT NULL DEFAULT '',
+        title TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        actual_provider TEXT NOT NULL DEFAULT '',
+        actual_model_name TEXT NOT NULL DEFAULT '',
+        provider_response_id TEXT NOT NULL DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS model_pricing (
         model_id TEXT PRIMARY KEY,
         provider TEXT NOT NULL,
@@ -182,6 +206,8 @@ SCHEMA_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_personalized_analysis_lookup ON personalized_analysis(user_id, stock_code, trade_date, model_id)",
     "CREATE INDEX IF NOT EXISTS idx_user_profiles_updated ON user_profiles(updated_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_user_context_lookup ON user_context(user_id, stock_code, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_conversations_user_model ON conversations(user_id, model_id, updated_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at ASC)",
     "CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_email_tokens_hash ON email_tokens(token_hash)",
     "CREATE INDEX IF NOT EXISTS idx_email_deliveries_user_trade ON email_deliveries(user_id, trade_date, delivery_type)",

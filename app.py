@@ -26,6 +26,7 @@ from src.auth import (
     verify_password,
 )
 from src.config import load_settings
+from src.chat import ChatError, generate_chat_reply
 from src.database import connect, execute, fetch_all, fetch_one, init_db
 from src.fetch_data import DataFetchError, fetch_market_data
 from src.fetch_news import fetch_news
@@ -152,6 +153,15 @@ class AdminUserUpdatePayload(BaseModel):
     is_active: Optional[bool] = None
     email_verified: Optional[bool] = None
     daily_email_enabled: Optional[bool] = None
+
+
+class ConversationCreatePayload(BaseModel):
+    conversation_type: str = Field(default="general", max_length=16)
+    stock_code: str = Field(default="", max_length=16)
+
+
+class ConversationMessagePayload(BaseModel):
+    content: str = Field(min_length=1, max_length=4000)
 
 
 def _normalize_stock_code(stock_code: str) -> str:
@@ -654,6 +664,13 @@ def _personalized_version_note(current_version: int, applied_version: int) -> st
     if applied_version == current_version:
         return f"当前画像 v{current_version} 已应用。"
     return f"当前画像 v{current_version}，这份建议仍停留在 v{applied_version}。"
+
+
+def _conversation_title_fallback(content: str, stock_code: str = "") -> str:
+    raw = content.strip().replace("\n", " ")
+    if stock_code:
+        return f"{stock_code} 对话"
+    return (raw[:18] or "新对话").strip()
 
 
 async def _load_personalized_analysis_state(
@@ -1513,6 +1530,200 @@ async def report_page(
     )
 
 
+async def _load_conversation_row(user_id: int, conversation_id: int):
+    return await fetch_one(
+        settings.db_path,
+        """
+        SELECT c.id, c.user_id, c.model_id, c.conversation_type, c.stock_code, c.title, c.created_at, c.updated_at,
+               s.stock_name
+        FROM conversations c
+        LEFT JOIN subscriptions s
+            ON s.user_id = c.user_id AND s.stock_code = c.stock_code
+        WHERE c.id = ? AND c.user_id = ?
+        """,
+        (conversation_id, user_id),
+    )
+
+
+async def _list_conversations(user_id: int) -> list[dict[str, object]]:
+    rows = await fetch_all(
+        settings.db_path,
+        """
+        SELECT
+            c.id,
+            c.model_id,
+            c.conversation_type,
+            c.stock_code,
+            c.title,
+            c.updated_at,
+            s.stock_name,
+            (
+                SELECT m.content
+                FROM messages m
+                WHERE m.conversation_id = c.id
+                ORDER BY m.id DESC
+                LIMIT 1
+            ) AS last_message
+        FROM conversations c
+        LEFT JOIN subscriptions s
+            ON s.user_id = c.user_id AND s.stock_code = c.stock_code
+        WHERE c.user_id = ?
+        ORDER BY c.updated_at DESC, c.id DESC
+        """,
+        (user_id,),
+    )
+    conversations: list[dict[str, object]] = []
+    for row in rows:
+        title = str(row["title"] or "").strip() or _conversation_title_fallback(str(row["last_message"] or ""), str(row["stock_code"] or ""))
+        last_message = str(row["last_message"] or "").strip()
+        conversations.append(
+            {
+                "id": int(row["id"]),
+                "model_id": str(row["model_id"]),
+                "conversation_type": str(row["conversation_type"]),
+                "stock_code": str(row["stock_code"] or ""),
+                "stock_name": str(row["stock_name"] or ""),
+                "title": title,
+                "updated_at": str(row["updated_at"] or ""),
+                "last_message_preview": f"{last_message[:42]}..." if len(last_message) > 42 else last_message,
+            }
+        )
+    return conversations
+
+
+async def _load_conversation_messages(conversation_id: int) -> list[dict[str, object]]:
+    rows = await fetch_all(
+        settings.db_path,
+        """
+        SELECT id, role, content, actual_provider, actual_model_name, provider_response_id, created_at
+        FROM messages
+        WHERE conversation_id = ?
+        ORDER BY id ASC
+        """,
+        (conversation_id,),
+    )
+    return [
+        {
+            "id": int(row["id"]),
+            "role": str(row["role"]),
+            "content": str(row["content"]),
+            "actual_provider": str(row["actual_provider"] or ""),
+            "actual_model_name": str(row["actual_model_name"] or ""),
+            "provider_response_id": str(row["provider_response_id"] or ""),
+            "created_at": str(row["created_at"] or ""),
+        }
+        for row in rows
+    ]
+
+
+async def _load_stock_chat_context(stock_code: str, model_id: str) -> str:
+    row = await fetch_one(
+        settings.db_path,
+        """
+        SELECT stock_name, trade_date, market_data_json, analysis_json
+        FROM analysis_cache
+        WHERE stock_code = ? AND model_id = ? AND status = 'success'
+        ORDER BY trade_date DESC
+        LIMIT 1
+        """,
+        (stock_code, model_id),
+    )
+    if row is None:
+        return ""
+    market_data = market_data_from_json(str(row["market_data_json"]))
+    analysis = analysis_result_from_json(str(row["analysis_json"]))
+    stock_name = str(row["stock_name"] or market_data.stock_name or stock_code)
+    return "\n".join(
+        [
+            f"股票：{stock_name}（{stock_code}）",
+            f"交易日：{row['trade_date']}",
+            f"收盘价：{market_data.snapshot.close_price:.2f}",
+            f"涨跌幅：{market_data.snapshot.change_pct:+.2f}%",
+            f"共享结论：{analysis.executive_summary}",
+            f"技术分析：{analysis.technical_analysis}",
+            f"资金面：{analysis.fund_flow_analysis}",
+            f"消息面：{analysis.news_impact}",
+            f"方向判断：{analysis.bias}",
+            f"支撑位：{analysis.support_price:.2f}",
+            f"压力位：{analysis.resistance_price:.2f}",
+            f"风险提示：{'；'.join(analysis.risk_notes[:3])}",
+        ]
+    )
+
+
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_page(request: Request, user=Depends(page_user_or_redirect)):
+    if user is None:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    if not user.email_verified_at:
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    conversations = await _list_conversations(user.id)
+    selected_conversation = conversations[0] if conversations else None
+    selected_messages: list[dict[str, object]] = []
+    if selected_conversation is not None:
+        selected_messages = await _load_conversation_messages(int(selected_conversation["id"]))
+    subscriptions = await fetch_all(
+        settings.db_path,
+        """
+        SELECT stock_code, stock_name
+        FROM subscriptions
+        WHERE user_id = ? AND is_active = 1
+        ORDER BY sort_order ASC, id ASC
+        """,
+        (user.id,),
+    )
+    return templates.TemplateResponse(
+        request,
+        "chat.html",
+        _template_context(
+            request,
+            title="对话",
+            user=user,
+            conversations=conversations,
+            selected_conversation=selected_conversation,
+            selected_messages=selected_messages,
+            subscriptions=[dict(row) for row in subscriptions],
+        ),
+    )
+
+
+@app.get("/chat/{conversation_id}", response_class=HTMLResponse)
+async def chat_detail_page(request: Request, conversation_id: int, user=Depends(page_user_or_redirect)):
+    if user is None:
+        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
+    if not user.email_verified_at:
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
+    conversation_row = await _load_conversation_row(user.id, conversation_id)
+    if conversation_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    conversations = await _list_conversations(user.id)
+    selected_messages = await _load_conversation_messages(conversation_id)
+    subscriptions = await fetch_all(
+        settings.db_path,
+        """
+        SELECT stock_code, stock_name
+        FROM subscriptions
+        WHERE user_id = ? AND is_active = 1
+        ORDER BY sort_order ASC, id ASC
+        """,
+        (user.id,),
+    )
+    selected_conversation = next((item for item in conversations if int(item["id"]) == conversation_id), None)
+    return templates.TemplateResponse(
+        request,
+        "chat.html",
+        _template_context(
+            request,
+            title="对话",
+            user=user,
+            conversations=conversations,
+            selected_conversation=selected_conversation,
+            selected_messages=selected_messages,
+            subscriptions=[dict(row) for row in subscriptions],
+        ),
+    )
+
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, user=Depends(page_user_or_redirect)):
     if user is None:
@@ -1899,6 +2110,154 @@ async def personalized_report_generate(
         profile=profile,
     )
     return {"ok": True, "state": "generating", "message": "正在重新生成个性化建议。"}
+
+
+@app.get("/api/conversations")
+async def conversation_list(user=Depends(verified_user)):
+    return {"ok": True, "items": await _list_conversations(user.id)}
+
+
+@app.post("/api/conversations")
+async def conversation_create(payload: ConversationCreatePayload, user=Depends(verified_user)):
+    conversation_type = payload.conversation_type.strip().lower() or "general"
+    if conversation_type not in {"general", "stock"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported conversation_type")
+    stock_code = _normalize_stock_code(payload.stock_code) if conversation_type == "stock" and payload.stock_code.strip() else ""
+    stock_name = ""
+    if conversation_type == "stock":
+        subscription = await fetch_one(
+            settings.db_path,
+            """
+            SELECT stock_code, stock_name
+            FROM subscriptions
+            WHERE user_id = ? AND stock_code = ? AND is_active = 1
+            """,
+            (user.id, stock_code),
+        )
+        if subscription is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Stock conversation requires an active subscription")
+        stock_name = str(subscription["stock_name"] or stock_code)
+    title = "新对话" if conversation_type == "general" else f"{stock_name or stock_code} 对话"
+    conversation_id = await execute(
+        settings.db_path,
+        """
+        INSERT INTO conversations (user_id, model_id, conversation_type, stock_code, title)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (user.id, user.preferred_model, conversation_type, stock_code, title),
+    )
+    return {"ok": True, "conversation_id": conversation_id, "url": f"/chat/{conversation_id}"}
+
+
+@app.get("/api/conversations/{conversation_id}")
+async def conversation_detail(conversation_id: int, user=Depends(verified_user)):
+    conversation_row = await _load_conversation_row(user.id, conversation_id)
+    if conversation_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    messages = await _load_conversation_messages(conversation_id)
+    return {
+        "ok": True,
+        "conversation": {
+            "id": int(conversation_row["id"]),
+            "model_id": str(conversation_row["model_id"]),
+            "conversation_type": str(conversation_row["conversation_type"]),
+            "stock_code": str(conversation_row["stock_code"] or ""),
+            "stock_name": str(conversation_row["stock_name"] or ""),
+            "title": str(conversation_row["title"] or ""),
+            "updated_at": str(conversation_row["updated_at"] or ""),
+        },
+        "messages": messages,
+    }
+
+
+@app.post("/api/conversations/{conversation_id}/messages")
+async def conversation_message_create(conversation_id: int, payload: ConversationMessagePayload, user=Depends(verified_user)):
+    conversation_row = await _load_conversation_row(user.id, conversation_id)
+    if conversation_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    content = payload.content.strip()
+    if not content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Message content is required")
+
+    await execute(
+        settings.db_path,
+        """
+        INSERT INTO messages (conversation_id, role, content)
+        VALUES (?, 'user', ?)
+        """,
+        (conversation_id, content),
+    )
+
+    history_rows = await fetch_all(
+        settings.db_path,
+        """
+        SELECT role, content
+        FROM messages
+        WHERE conversation_id = ?
+        ORDER BY id ASC
+        """,
+        (conversation_id,),
+    )
+    history = [{"role": str(row["role"]), "content": str(row["content"])} for row in history_rows]
+    shared_context = ""
+    if str(conversation_row["conversation_type"]) == "stock":
+        shared_context = await _load_stock_chat_context(str(conversation_row["stock_code"] or ""), str(conversation_row["model_id"]))
+
+    try:
+        output = await run_in_threadpool(
+            generate_chat_reply,
+            db_path=settings.db_path,
+            settings=settings,
+            model_id=str(conversation_row["model_id"]),
+            conversation_type=str(conversation_row["conversation_type"]),
+            stock_code=str(conversation_row["stock_code"] or ""),
+            shared_context=shared_context,
+            messages=history,
+        )
+    except ChatError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    assistant_message_id = await execute(
+        settings.db_path,
+        """
+        INSERT INTO messages (
+            conversation_id, role, content, actual_provider, actual_model_name, provider_response_id
+        )
+        VALUES (?, 'assistant', ?, ?, ?, ?)
+        """,
+        (
+            conversation_id,
+            output.result.reply,
+            output.actual_provider,
+            output.actual_model_name,
+            output.provider_response_id,
+        ),
+    )
+    title = str(conversation_row["title"] or "").strip()
+    if not title or title == "新对话" or title.endswith("对话"):
+        title = output.result.title.strip() or _conversation_title_fallback(content, str(conversation_row["stock_code"] or ""))
+    await execute(
+        settings.db_path,
+        """
+        UPDATE conversations
+        SET title = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND user_id = ?
+        """,
+        (title[:32], conversation_id, user.id),
+    )
+    return {
+        "ok": True,
+        "conversation_id": conversation_id,
+        "title": title[:32],
+        "assistant_message": {
+            "id": assistant_message_id,
+            "role": "assistant",
+            "content": output.result.reply,
+            "actual_provider": output.actual_provider,
+            "actual_model_name": output.actual_model_name,
+            "provider_response_id": output.provider_response_id,
+        },
+    }
 
 
 @app.get("/api/admin/users")

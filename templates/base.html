@@ -358,7 +358,7 @@
     }
     .mobile-tab-bar {
       display: none;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
       align-items: center;
       padding: 8px 12px calc(8px + var(--safe-area-bottom));
@@ -462,6 +462,7 @@
       <div class="nav-actions">
         {% if user %}
         <a class="nav-link{% if current_path == '/dashboard' %} active{% endif %}" href="/dashboard">自选</a>
+        <a class="nav-link{% if current_path.startswith('/chat') %} active{% endif %}" href="/chat">对话</a>
         <a class="nav-link{% if current_path == '/settings' %} active{% endif %}" href="/settings">我的</a>
         {% if user.is_admin %}
         <a class="nav-link{% if current_path == '/admin/users' %} active{% endif %}" href="/admin/users">管理</a>
@@ -487,6 +488,7 @@
     <div class="mobile-tab-nav">
       <nav class="mobile-tab-bar" aria-label="移动端底部导航">
         <a class="tab-link{% if current_path == '/dashboard' %} active{% endif %}" href="/dashboard">自选</a>
+        <a class="tab-link{% if current_path.startswith('/chat') %} active{% endif %}" href="/chat">对话</a>
         <a class="tab-link{% if current_path == '/settings' %} active{% endif %}" href="/settings">我的</a>
       </nav>
     </div>
