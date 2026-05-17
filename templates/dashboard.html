@@ -45,11 +45,15 @@
     align-items: start;
   }
   .page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    display: grid;
     gap: 16px;
     margin-bottom: 18px;
+  }
+  .page-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
   }
   .page-title {
     margin: 0;
@@ -112,21 +116,24 @@
   .watch-actions {
     display: flex;
     gap: 10px;
-    flex-wrap: wrap;
     align-items: center;
   }
   .icon-button {
-    min-width: 48px;
-    min-height: 48px;
-    padding: 0 14px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0 10px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: var(--bg-elevated);
+    background: transparent;
     color: var(--text-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 16px;
-    box-shadow: var(--shadow-soft);
+    border: 0;
+    border-radius: 12px;
+    flex: 0 0 auto;
+  }
+  .icon-button:hover {
+    color: var(--text-primary);
+    background: rgba(59, 130, 246, 0.08);
   }
   .icon-button.refreshing {
     opacity: 0.7;
@@ -240,9 +247,9 @@
       flex-direction: column;
       padding-bottom: calc(var(--tab-bar-height) * 2 / 3);
     }
-    .page-header {
-      align-items: flex-start;
-      flex-direction: column;
+    .watch-actions {
+      width: 100%;
+      justify-content: flex-start;
     }
     .watch-layout {
       flex: 1;
@@ -292,14 +299,16 @@
   <div class="watch-layout">
     <section class="watch-main">
       <div class="page-header">
-        <div>
-          <h1 class="page-title">自选股</h1>
-          <p class="page-subtitle">每天只看最重要的结论，点进单只股票再看完整报告。</p>
-        </div>
-        <div class="watch-actions">
+        <div class="page-title-row">
+          <div>
+            <h1 class="page-title">自选股</h1>
+            <p class="page-subtitle">每天只看最重要的结论，点进单只股票再看完整报告。</p>
+          </div>
           <button class="icon-button" type="button" id="dashboard-refresh" aria-label="刷新页面" title="刷新页面">
             <span class="refresh-icon" aria-hidden="true">↻</span>
           </button>
+        </div>
+        <div class="watch-actions">
           <button class="button" type="button" id="open-add-stock" {% if not is_verified %}disabled{% endif %}>+ 添加股票</button>
         </div>
       </div>
