@@ -34,6 +34,7 @@ def generate_chat_reply(
     conversation_type: str,
     stock_code: str,
     shared_context: str,
+    memory_context: str,
     messages: list[dict[str, str]],
 ) -> ChatOutput:
     provider = get_provider(db_path, settings, model_id)
@@ -41,6 +42,7 @@ def generate_chat_reply(
         conversation_type=conversation_type,
         stock_code=stock_code,
         shared_context=shared_context,
+        memory_context=memory_context,
         messages=messages,
     )
     try:
@@ -62,6 +64,7 @@ def _build_prompt(
     conversation_type: str,
     stock_code: str,
     shared_context: str,
+    memory_context: str,
     messages: list[dict[str, str]],
 ) -> str:
     context_lines = [
@@ -76,6 +79,9 @@ def _build_prompt(
         if shared_context.strip():
             context_lines.append("以下是该股票当前可用的共享分析上下文，请优先基于它回答。")
             context_lines.append(shared_context.strip())
+        if memory_context.strip():
+            context_lines.append("以下是该用户在这只股票上的历史记忆，请结合它理解用户背景和偏好，但不要机械复述。")
+            context_lines.append(memory_context.strip())
     else:
         context_lines.append("当前是普通会话，不注入单只股票共享分析。")
 

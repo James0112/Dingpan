@@ -32,6 +32,7 @@ from src.fetch_data import DataFetchError, fetch_market_data
 from src.fetch_news import fetch_news
 from src.analyze import AnalysisError, analyze_market_data
 from src.mailer import MailerError, render_template, send_resend_email
+from src.memory import load_stock_memory_context, update_stock_memory_context_sync
 from src.personalize import PersonalizedAnalysisError, generate_personalized_analysis
 from src.push import (
     PushError,
@@ -2210,7 +2211,12 @@ async def conversation_detail(conversation_id: int, user=Depends(verified_user))
 
 
 @app.post("/api/conversations/{conversation_id}/messages")
-async def conversation_message_create(conversation_id: int, payload: ConversationMessagePayload, user=Depends(verified_user)):
+async def conversation_message_create(
+    conversation_id: int,
+    payload: ConversationMessagePayload,
+    background_tasks: BackgroundTasks,
+    user=Depends(verified_user),
+):
     conversation_row = await _load_conversation_row(user.id, conversation_id)
     if conversation_row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
@@ -2242,6 +2248,11 @@ async def conversation_message_create(conversation_id: int, payload: Conversatio
     history = [{"role": str(row["role"]), "content": str(row["content"])} for row in history_rows]
     shared_context_payload = await _load_stock_chat_context(str(conversation_row["stock_code"] or ""), str(conversation_row["model_id"]))
     shared_context = shared_context_payload["prompt_context"]
+    memory_context = await load_stock_memory_context(
+        db_path=settings.db_path,
+        user_id=user.id,
+        stock_code=str(conversation_row["stock_code"] or ""),
+    )
 
     try:
         output = await run_in_threadpool(
@@ -2252,6 +2263,7 @@ async def conversation_message_create(conversation_id: int, payload: Conversatio
             conversation_type="stock",
             stock_code=str(conversation_row["stock_code"] or ""),
             shared_context=shared_context,
+            memory_context=memory_context.summary,
             messages=history,
         )
     except ChatError as exc:
@@ -2293,6 +2305,15 @@ async def conversation_message_create(conversation_id: int, payload: Conversatio
         WHERE id = ? AND user_id = ?
         """,
         (title[:32], conversation_id, user.id),
+    )
+    background_tasks.add_task(
+        update_stock_memory_context_sync,
+        db_path=settings.db_path,
+        settings=settings,
+        user_id=user.id,
+        stock_code=str(conversation_row["stock_code"] or ""),
+        model_id=str(conversation_row["model_id"]),
+        conversation_id=conversation_id,
     )
     return {
         "ok": True,
