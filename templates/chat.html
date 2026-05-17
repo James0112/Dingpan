@@ -36,10 +36,10 @@
   .chat-page.has-chat-layout {
     --chat-side-gap: 12px;
     --chat-toolbar-top: 12px;
-    --chat-section-gap: 12px;
+    --chat-section-gap: 10px;
     --chat-toolbar-height: 74px;
     --chat-composer-height: 68px;
-    --chat-composer-bottom: calc(var(--page-bottom-spacing) + 10px);
+    --chat-composer-bottom: calc(var(--page-bottom-spacing) + 6px);
   }
   .chat-toolbar {
     position: absolute;
@@ -186,10 +186,10 @@
     box-shadow: var(--shadow-soft);
   }
   body.keyboard-open .chat-page.has-chat-layout {
-    --chat-composer-bottom: calc(var(--viewport-bottom-offset) + 6px);
+    --chat-composer-bottom: calc(var(--viewport-bottom-offset) + 2px);
   }
   body.keyboard-open .chat-thread {
-    bottom: calc(var(--chat-composer-height) + var(--chat-composer-bottom) + 10px);
+    bottom: calc(var(--chat-composer-height) + var(--chat-composer-bottom) + 6px);
   }
   .chat-thread::-webkit-scrollbar {
     width: 0;
@@ -338,7 +338,7 @@
       right: 8px;
     }
     body.keyboard-open .chat-composer {
-      bottom: calc(var(--viewport-bottom-offset) + 4px);
+      bottom: calc(var(--viewport-bottom-offset) + 2px);
       border-radius: 16px;
     }
     .chat-bubble {
