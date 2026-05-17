@@ -206,6 +206,9 @@
   .chat-bubble.assistant {
     align-self: flex-start;
   }
+  .chat-bubble.is-pending {
+    color: var(--text-secondary);
+  }
   .chat-bubble-meta {
     color: var(--text-muted);
     font-size: 12px;
@@ -435,6 +438,7 @@
   let chatLayoutSettleTimers = [];
   let chatViewportBaseline = 0;
   let chatViewportWidth = window.innerWidth;
+  let pendingAssistantBubble = null;
 
   function setStockMenuOpen(open) {
     if (!stockMenu || !stockBackdrop) {
@@ -451,6 +455,19 @@
     chatThread.scrollTo({ top: chatThread.scrollHeight, behavior: behavior || "auto" });
   }
 
+  function updateChatViewportBaseline() {
+    if (!chatPage || !chatPage.classList.contains("has-chat-layout")) {
+      return;
+    }
+    if (!window.matchMedia("(max-width: 768px)").matches) {
+      chatViewportBaseline = 0;
+      return;
+    }
+    const pageRect = chatPage.getBoundingClientRect();
+    const baselineHeight = Math.max(220, window.innerHeight - pageRect.top);
+    chatViewportBaseline = baselineHeight;
+  }
+
   function syncChatChromeHeights() {
     if (!chatPage) {
       return;
@@ -465,7 +482,7 @@
       return;
     }
     if (Math.abs(window.innerWidth - chatViewportWidth) > 80) {
-      chatViewportBaseline = 0;
+      updateChatViewportBaseline();
     }
     chatViewportWidth = window.innerWidth;
     const viewport = window.visualViewport;
@@ -473,15 +490,13 @@
     const viewportTop = viewport ? Math.max(0, viewport.offsetTop || 0) : 0;
     const viewportHeight = viewport ? viewport.height : window.innerHeight;
     const visibleViewportBottom = viewportTop + viewportHeight;
-    const closedViewportBottom = Math.max(window.innerHeight, visibleViewportBottom);
-    if (!keyboardOpen) {
-      chatViewportBaseline = Math.max(chatViewportBaseline, closedViewportBottom);
-    }
-    const viewportBottom = keyboardOpen
-      ? visibleViewportBottom
-      : Math.max(closedViewportBottom, chatViewportBaseline);
     const pageRect = chatPage.getBoundingClientRect();
-    const availableHeight = Math.max(220, viewportBottom - pageRect.top);
+    if (!chatViewportBaseline || !keyboardOpen) {
+      updateChatViewportBaseline();
+    }
+    const availableHeight = keyboardOpen
+      ? Math.max(220, visibleViewportBottom - pageRect.top)
+      : chatViewportBaseline;
     chatPage.style.height = `${availableHeight}px`;
   }
 
@@ -555,12 +570,15 @@
     });
   });
 
-  function appendBubble(role, content, actualModelName) {
+  function appendBubble(role, content, actualModelName, options) {
     if (!chatThread) {
-      return;
+      return null;
     }
     const bubble = document.createElement("article");
     bubble.className = `chat-bubble ${role}`;
+    if (options && options.pending) {
+      bubble.classList.add("is-pending");
+    }
 
     const copy = document.createElement("div");
     copy.textContent = content;
@@ -575,6 +593,15 @@
 
     chatThread.appendChild(bubble);
     scrollThreadToBottom("smooth");
+    return bubble;
+  }
+
+  function clearPendingAssistantBubble() {
+    if (!pendingAssistantBubble) {
+      return;
+    }
+    pendingAssistantBubble.remove();
+    pendingAssistantBubble = null;
   }
 
   if (chatThread) {
@@ -624,9 +651,11 @@
       resizeComposerInput();
       chatInput.disabled = true;
       chatSubmit.disabled = true;
-      chatSubmit.textContent = "正在生成...";
+      chatSubmit.textContent = "处理中";
       chatFormMessage.textContent = "";
       chatFormMessage.classList.remove("is-error");
+      clearPendingAssistantBubble();
+      pendingAssistantBubble = appendBubble("assistant", "正在生成...", "", { pending: true });
 
       const response = await fetch(`/api/conversations/${chatForm.dataset.conversationId}/messages`, {
         method: "POST",
@@ -638,6 +667,7 @@
       chatInput.disabled = false;
       chatSubmit.disabled = false;
       chatSubmit.textContent = "发送";
+      clearPendingAssistantBubble();
 
       if (!response.ok) {
         chatFormMessage.textContent = data.detail || "发送失败";
