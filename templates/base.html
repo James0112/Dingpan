@@ -61,6 +61,7 @@
       --safe-area-bottom: 0px;
       --viewport-bottom-offset: 0px;
       --page-bottom-spacing: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 8px);
+      --page-bottom-safe-spacing: calc(var(--tab-bar-height) + var(--safe-area-bottom) + 24px);
       --border: var(--border-color);
       --blue: var(--color-primary);
       --orange: var(--color-cost);
@@ -410,7 +411,7 @@
         height: 100dvh;
         min-height: 100vh;
         min-height: 100dvh;
-        padding: calc(var(--safe-area-top) + 12px) 12px calc(var(--page-bottom-spacing) + 12px);
+        padding: calc(var(--safe-area-top) + 12px) 12px 0;
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -421,6 +422,7 @@
         overflow-y: auto;
         overscroll-behavior-y: contain;
         -webkit-overflow-scrolling: touch;
+        padding-bottom: var(--page-bottom-safe-spacing);
       }
       .nav {
         display: none;
