@@ -31,27 +31,28 @@
     flex: 1 1 0%;
     height: 100%;
     min-height: 0;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-color);
-    border-radius: 24px 24px 0 0;
-    box-shadow: var(--shadow-soft);
     overflow: hidden;
   }
   .chat-page.has-chat-layout {
+    --chat-side-gap: 16px;
+    --chat-toolbar-top: 16px;
+    --chat-section-gap: 16px;
     --chat-toolbar-height: 120px;
     --chat-composer-height: 96px;
-    --chat-bottom-offset: calc(var(--page-bottom-spacing) + 8px);
+    --chat-composer-bottom: 16px;
   }
   .chat-toolbar {
     position: absolute;
-    top: 0;
-    right: 0;
-    left: 0;
+    top: var(--chat-toolbar-top);
+    right: var(--chat-side-gap);
+    left: var(--chat-side-gap);
     z-index: 3;
     padding: 16px;
-    border-bottom: 1px solid var(--border-color);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
     background: rgba(255, 255, 255, 0.86);
     backdrop-filter: blur(14px);
+    box-shadow: var(--shadow-soft);
   }
   [data-theme="dark"] .chat-toolbar {
     background: rgba(24, 24, 27, 0.86);
@@ -163,10 +164,10 @@
   }
   .chat-thread {
     position: absolute;
-    top: var(--chat-toolbar-height);
-    right: 0;
-    bottom: calc(var(--chat-composer-height) + var(--chat-bottom-offset));
-    left: 0;
+    top: calc(var(--chat-toolbar-top) + var(--chat-toolbar-height) + var(--chat-section-gap));
+    right: var(--chat-side-gap);
+    bottom: calc(var(--chat-composer-height) + var(--chat-composer-bottom) + var(--chat-section-gap));
+    left: var(--chat-side-gap);
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
@@ -178,6 +179,9 @@
     background:
       linear-gradient(180deg, rgba(37, 99, 235, 0.05), transparent 18%),
       var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    box-shadow: var(--shadow-soft);
   }
   .chat-thread::-webkit-scrollbar {
     width: 0;
@@ -229,16 +233,18 @@
   }
   .chat-composer {
     position: absolute;
-    right: 0;
-    bottom: var(--chat-bottom-offset);
-    left: 0;
+    right: var(--chat-side-gap);
+    bottom: var(--chat-composer-bottom);
+    left: var(--chat-side-gap);
     z-index: 3;
     display: grid;
     gap: 10px;
     padding: 12px 16px calc(12px + var(--safe-area-bottom));
-    border-top: 1px solid var(--border-color);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
     background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(14px);
+    box-shadow: var(--shadow-soft);
   }
   [data-theme="dark"] .chat-composer {
     background: rgba(24, 24, 27, 0.92);
@@ -258,6 +264,9 @@
     line-height: 1.5;
     padding-top: 12px;
     padding-bottom: 12px;
+    border-radius: 18px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-elevated);
     scrollbar-width: none;
   }
   .chat-composer textarea::-webkit-scrollbar {
@@ -280,8 +289,11 @@
     color: var(--color-cost);
   }
   @media (max-width: 768px) {
-    .chat-page {
-      border-radius: 20px 20px 0 0;
+    .chat-page.has-chat-layout {
+      --chat-side-gap: 14px;
+      --chat-toolbar-top: 14px;
+      --chat-section-gap: 14px;
+      --chat-composer-bottom: calc(var(--page-bottom-spacing) + 12px);
     }
     .chat-stock-menu {
       position: fixed;
@@ -299,9 +311,17 @@
     }
     .chat-thread {
       padding: 16px 14px;
+      border-radius: 22px;
     }
     .chat-composer {
+      position: fixed;
+      left: var(--chat-side-gap);
+      right: var(--chat-side-gap);
+      bottom: var(--chat-composer-bottom);
+      z-index: 50;
+      width: auto;
       padding: 10px 14px calc(10px + var(--safe-area-bottom));
+      border-radius: 22px;
     }
     .chat-bubble {
       max-width: 92%;
@@ -309,7 +329,7 @@
   }
 </style>
 
-  {% set has_ready_stock = stocks | selectattr("status", "equalto", "ready") | list | length > 0 %}
+{% set has_ready_stock = stocks | selectattr("status", "equalto", "ready") | list | length > 0 %}
 {% set show_chat_layout = selected_stock or has_ready_stock %}
 
 <div class="chat-page{% if show_chat_layout %} has-chat-layout{% endif %}" id="chat-page-root">
