@@ -21,13 +21,15 @@
   .page-body {
     flex: 1 1 auto;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
   }
   .chat-page {
     position: relative;
     display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1 1 auto;
     min-height: 0;
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
@@ -380,6 +382,7 @@
   const stockTrigger = document.getElementById("chat-stock-trigger");
   const stockMenu = document.getElementById("chat-stock-menu");
   const stockBackdrop = document.getElementById("chat-stock-backdrop");
+  const chatPageMessage = document.getElementById("chat-page-message");
   const chatForm = document.getElementById("chat-form");
   const chatFormMessage = document.getElementById("chat-form-message");
   const chatThread = document.getElementById("chat-thread");
@@ -388,8 +391,8 @@
   const selectedStockCode = "{{ selected_stock.stock_code if selected_stock else '' }}";
   const stockQueryPresent = "{{ '1' if stock_query_present else '' }}" === "1";
   const selectedStockReady = "{{ '1' if selected_conversation else '' }}" === "1";
+  const totalStockCount = {{ stocks|length }};
   const readyStockCodes = [{% for item in stocks if item.status == "ready" %}"{{ item.stock_code }}"{% if not loop.last %}, {% endif %}{% endfor %}];
-  const selectableStockCount = readyStockCodes.length;
 
   function setStockMenuOpen(open) {
     if (!stockMenu || !stockBackdrop) {
@@ -434,10 +437,14 @@
 
   if (stockTrigger) {
     stockTrigger.addEventListener("click", () => {
-      if (selectableStockCount <= 1) {
-        chatFormMessage.textContent = "当前只有一只可对话股票";
-        chatFormMessage.classList.remove("is-error");
+      if (totalStockCount <= 1) {
+        if (chatPageMessage) {
+          chatPageMessage.textContent = "当前没有更多股票可切换";
+        }
         return;
+      }
+      if (chatPageMessage) {
+        chatPageMessage.textContent = "";
       }
       setStockMenuOpen(true);
     });
