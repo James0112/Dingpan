@@ -416,6 +416,7 @@
 <script>
   const CHAT_LAST_STOCK_KEY = "last_chat_stock_code";
   const chatPage = document.getElementById("chat-page-root");
+  const chatToolbar = document.querySelector(".chat-toolbar");
   const stockTrigger = document.getElementById("chat-stock-trigger");
   const stockMenu = document.getElementById("chat-stock-menu");
   const stockBackdrop = document.getElementById("chat-stock-backdrop");
@@ -431,6 +432,7 @@
   const selectedStockReady = "{{ '1' if selected_conversation else '' }}" === "1";
   const totalStockCount = {{ stocks|length }};
   const readyStockCodes = [{% for item in stocks if item.status == "ready" %}"{{ item.stock_code }}"{% if not loop.last %}, {% endif %}{% endfor %}];
+  let chatLayoutSettleTimers = [];
 
   function setStockMenuOpen(open) {
     if (!stockMenu || !stockBackdrop) {
@@ -458,6 +460,16 @@
     const pageRect = chatPage.getBoundingClientRect();
     const availableHeight = Math.max(220, viewportHeight - pageRect.top);
     chatPage.style.height = `${availableHeight}px`;
+  }
+
+  function scheduleChatLayoutSettle() {
+    chatLayoutSettleTimers.forEach((timer) => window.clearTimeout(timer));
+    chatLayoutSettleTimers = [0, 120, 260].map((delay) => (
+      window.setTimeout(() => {
+        syncChatChromeHeights();
+        window.requestAnimationFrame(syncChatChromeHeights);
+      }, delay)
+    ));
   }
 
   function resizeComposerInput() {
@@ -543,7 +555,7 @@
   }
 
   if (chatThread) {
-    syncChatChromeHeights();
+    scheduleChatLayoutSettle();
     scrollThreadToBottom("auto");
   }
 
@@ -556,7 +568,7 @@
 
   if (typeof ResizeObserver !== "undefined") {
     const resizeObserver = new ResizeObserver(() => {
-      syncChatChromeHeights();
+      scheduleChatLayoutSettle();
     });
     if (chatToolbar) {
       resizeObserver.observe(chatToolbar);
@@ -566,14 +578,12 @@
     }
   }
 
-  window.addEventListener("resize", syncChatChromeHeights);
-  document.addEventListener("focusin", syncChatChromeHeights);
-  document.addEventListener("focusout", () => {
-    window.setTimeout(syncChatChromeHeights, 140);
-  });
+  window.addEventListener("resize", scheduleChatLayoutSettle);
+  document.addEventListener("focusin", scheduleChatLayoutSettle);
+  document.addEventListener("focusout", scheduleChatLayoutSettle);
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", syncChatChromeHeights);
-    window.visualViewport.addEventListener("scroll", syncChatChromeHeights);
+    window.visualViewport.addEventListener("resize", scheduleChatLayoutSettle);
+    window.visualViewport.addEventListener("scroll", scheduleChatLayoutSettle);
   }
 
   if (chatForm && chatInput && chatSubmit && chatForm.dataset.conversationId) {
