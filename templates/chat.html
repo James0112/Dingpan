@@ -42,6 +42,7 @@
     --chat-composer-bottom: calc(var(--page-bottom-spacing) + 6px);
     --chat-thread-top: 96px;
     --chat-thread-height: 240px;
+    --chat-card-radius: 22px;
   }
   .chat-toolbar {
     position: absolute;
@@ -61,7 +62,7 @@
     justify-content: space-between;
     gap: 10px;
     padding: 10px 14px;
-    border-radius: 16px;
+    border-radius: var(--chat-card-radius);
     border: 1px solid var(--border-color);
     background: var(--bg-elevated);
     color: var(--text-primary);
@@ -184,7 +185,7 @@
       linear-gradient(180deg, rgba(37, 99, 235, 0.05), transparent 18%),
       var(--bg-surface);
     border: 1px solid var(--border-color);
-    border-radius: 24px;
+    border-radius: var(--chat-card-radius);
     box-shadow: var(--shadow-soft);
   }
   body.keyboard-open .chat-page.has-chat-layout {
@@ -246,9 +247,9 @@
     z-index: 3;
     display: grid;
     gap: 6px;
-    padding: 10px 12px calc(10px + var(--safe-area-bottom));
+    padding: 6px;
     border: 1px solid var(--border-color);
-    border-radius: 24px;
+    border-radius: var(--chat-card-radius);
     background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(14px);
     box-shadow: var(--shadow-soft);
@@ -259,7 +260,7 @@
   .chat-composer-row {
     display: flex;
     align-items: flex-end;
-    gap: 10px;
+    gap: 8px;
   }
   .chat-composer textarea {
     flex: 1 1 auto;
@@ -270,7 +271,7 @@
     overflow-y: auto;
     line-height: 1.35;
     padding: 10px 12px;
-    border-radius: 14px;
+    border-radius: 16px;
     border: 1px solid var(--border-color);
     background: var(--bg-elevated);
     scrollbar-width: none;
@@ -285,6 +286,7 @@
     width: 72px;
     min-height: 42px;
     padding: 0 10px;
+    border-radius: 16px;
     white-space: nowrap;
     text-align: center;
   }
@@ -318,7 +320,6 @@
     }
     .chat-thread {
       padding: 16px 14px;
-      border-radius: 22px;
     }
     .chat-composer {
       position: fixed;
@@ -327,8 +328,7 @@
       bottom: var(--chat-composer-bottom);
       z-index: 50;
       width: auto;
-      padding: 8px 10px calc(8px + var(--safe-area-bottom));
-      border-radius: 18px;
+      padding: 6px;
     }
     body.keyboard-open .chat-toolbar,
     body.keyboard-open .chat-thread,
@@ -338,7 +338,6 @@
     }
     body.keyboard-open .chat-composer {
       bottom: calc(var(--viewport-bottom-offset) + 2px);
-      border-radius: 16px;
     }
     .chat-bubble {
       max-width: 92%;
