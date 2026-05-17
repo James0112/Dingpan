@@ -433,6 +433,8 @@
   const totalStockCount = {{ stocks|length }};
   const readyStockCodes = [{% for item in stocks if item.status == "ready" %}"{{ item.stock_code }}"{% if not loop.last %}, {% endif %}{% endfor %}];
   let chatLayoutSettleTimers = [];
+  let chatViewportBaseline = 0;
+  let chatViewportWidth = window.innerWidth;
 
   function setStockMenuOpen(open) {
     if (!stockMenu || !stockBackdrop) {
@@ -456,15 +458,30 @@
     if (!chatPage.classList.contains("has-chat-layout")) {
       return;
     }
-    const viewport = window.visualViewport;
-    const keyboardOpen = document.body.classList.contains("keyboard-open");
-    if (!viewport || !keyboardOpen) {
+    if (!window.matchMedia("(max-width: 768px)").matches) {
       chatPage.style.removeProperty("height");
+      chatViewportBaseline = 0;
+      chatViewportWidth = window.innerWidth;
       return;
     }
-    const viewportHeight = viewport.height;
+    if (Math.abs(window.innerWidth - chatViewportWidth) > 80) {
+      chatViewportBaseline = 0;
+    }
+    chatViewportWidth = window.innerWidth;
+    const viewport = window.visualViewport;
+    const keyboardOpen = document.body.classList.contains("keyboard-open");
+    const viewportTop = viewport ? Math.max(0, viewport.offsetTop || 0) : 0;
+    const viewportHeight = viewport ? viewport.height : window.innerHeight;
+    const visibleViewportBottom = viewportTop + viewportHeight;
+    const closedViewportBottom = Math.max(window.innerHeight, visibleViewportBottom);
+    if (!keyboardOpen) {
+      chatViewportBaseline = Math.max(chatViewportBaseline, closedViewportBottom);
+    }
+    const viewportBottom = keyboardOpen
+      ? visibleViewportBottom
+      : Math.max(closedViewportBottom, chatViewportBaseline);
     const pageRect = chatPage.getBoundingClientRect();
-    const availableHeight = Math.max(220, viewportHeight - pageRect.top);
+    const availableHeight = Math.max(220, viewportBottom - pageRect.top);
     chatPage.style.height = `${availableHeight}px`;
   }
 
