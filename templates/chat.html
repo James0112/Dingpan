@@ -456,7 +456,13 @@
     if (!chatPage.classList.contains("has-chat-layout")) {
       return;
     }
-    const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    const viewport = window.visualViewport;
+    const keyboardOpen = document.body.classList.contains("keyboard-open");
+    if (!viewport || !keyboardOpen) {
+      chatPage.style.removeProperty("height");
+      return;
+    }
+    const viewportHeight = viewport.height;
     const pageRect = chatPage.getBoundingClientRect();
     const availableHeight = Math.max(220, viewportHeight - pageRect.top);
     chatPage.style.height = `${availableHeight}px`;
@@ -464,7 +470,7 @@
 
   function scheduleChatLayoutSettle() {
     chatLayoutSettleTimers.forEach((timer) => window.clearTimeout(timer));
-    chatLayoutSettleTimers = [0, 120, 260].map((delay) => (
+    chatLayoutSettleTimers = [0, 120, 260, 420].map((delay) => (
       window.setTimeout(() => {
         syncChatChromeHeights();
         window.requestAnimationFrame(syncChatChromeHeights);
