@@ -455,7 +455,7 @@
     chatThread.scrollTo({ top: chatThread.scrollHeight, behavior: behavior || "auto" });
   }
 
-  function updateChatViewportBaseline() {
+  function captureChatViewportBaseline(force) {
     if (!chatPage || !chatPage.classList.contains("has-chat-layout")) {
       return;
     }
@@ -465,7 +465,9 @@
     }
     const pageRect = chatPage.getBoundingClientRect();
     const baselineHeight = Math.max(220, window.innerHeight - pageRect.top);
-    chatViewportBaseline = baselineHeight;
+    if (force || !chatViewportBaseline) {
+      chatViewportBaseline = baselineHeight;
+    }
   }
 
   function syncChatChromeHeights() {
@@ -482,7 +484,7 @@
       return;
     }
     if (Math.abs(window.innerWidth - chatViewportWidth) > 80) {
-      updateChatViewportBaseline();
+      chatViewportBaseline = 0;
     }
     chatViewportWidth = window.innerWidth;
     const viewport = window.visualViewport;
@@ -491,8 +493,8 @@
     const viewportHeight = viewport ? viewport.height : window.innerHeight;
     const visibleViewportBottom = viewportTop + viewportHeight;
     const pageRect = chatPage.getBoundingClientRect();
-    if (!chatViewportBaseline || !keyboardOpen) {
-      updateChatViewportBaseline();
+    if (!keyboardOpen && !chatViewportBaseline) {
+      captureChatViewportBaseline(true);
     }
     const availableHeight = keyboardOpen
       ? Math.max(220, visibleViewportBottom - pageRect.top)
