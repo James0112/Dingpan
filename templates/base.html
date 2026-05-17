@@ -103,6 +103,8 @@
     * { box-sizing: border-box; }
     html {
       background: var(--bg-body);
+      height: 100%;
+      overscroll-behavior-y: none;
     }
     body {
       margin: 0;
@@ -114,6 +116,7 @@
       color: var(--text-primary);
       min-height: 100vh;
       min-height: 100dvh;
+      overscroll-behavior-y: none;
     }
     a { color: inherit; text-decoration: none; }
     .shell {
@@ -399,15 +402,25 @@
       display: none !important;
     }
     @media (max-width: 640px) {
+      body {
+        overflow: hidden;
+      }
       .shell {
+        height: 100vh;
+        height: 100dvh;
         min-height: 100vh;
         min-height: 100dvh;
         padding: calc(var(--safe-area-top) + 12px) 12px calc(var(--page-bottom-spacing) + 12px);
         display: flex;
         flex-direction: column;
+        overflow: hidden;
       }
       .page-body {
         flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        -webkit-overflow-scrolling: touch;
       }
       .nav {
         display: none;
