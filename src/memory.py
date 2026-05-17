@@ -42,6 +42,79 @@ async def load_stock_memory_context(*, db_path: str, user_id: int, stock_code: s
     return _memory_context_from_json(str(row["content_json"] or ""))
 
 
+def save_manual_memory(
+    *,
+    db_path: str,
+    user_id: int,
+    stock_code: str,
+    summary: str,
+    conversation_id: int,
+) -> MemoryContext:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        existing_row = conn.execute(
+            """
+            SELECT content_json
+            FROM user_context
+            WHERE user_id = ? AND stock_code = ? AND context_type = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (user_id, stock_code, MEMORY_CONTEXT_TYPE),
+        ).fetchone()
+        existing = (
+            _memory_context_from_json(str(existing_row["content_json"] or ""))
+            if existing_row is not None
+            else MemoryContext(summary="", last_message_id=0, model_id="", updated_from="", updated_at="")
+        )
+        conversation_row = conn.execute(
+            """
+            SELECT model_id
+            FROM conversations
+            WHERE id = ? AND user_id = ? AND stock_code = ? AND conversation_type = 'stock'
+            LIMIT 1
+            """,
+            (conversation_id, user_id, stock_code),
+        ).fetchone()
+        latest_message_row = conn.execute(
+            """
+            SELECT MAX(id) AS last_message_id
+            FROM messages
+            WHERE conversation_id = ?
+            """,
+            (conversation_id,),
+        ).fetchone()
+        latest_message_id = int(latest_message_row["last_message_id"] or 0) if latest_message_row is not None else 0
+        payload = {
+            "summary": summary.strip()[:200],
+            "last_message_id": max(existing.last_message_id, latest_message_id),
+            "model_id": str(conversation_row["model_id"] or "").strip() if conversation_row is not None else existing.model_id,
+            "updated_from": "manual",
+            "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        }
+        raw_payload = json.dumps(payload, ensure_ascii=False)
+        conn.execute(
+            """
+            INSERT INTO user_context (user_id, stock_code, context_type, content_json, trade_date, created_at)
+            VALUES (?, ?, ?, ?, '', CURRENT_TIMESTAMP)
+            """,
+            (user_id, stock_code, MEMORY_CONTEXT_TYPE, raw_payload),
+        )
+        inserted_id = int(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
+        conn.execute(
+            """
+            DELETE FROM user_context
+            WHERE user_id = ? AND stock_code = ? AND context_type = ? AND id <> ?
+            """,
+            (user_id, stock_code, MEMORY_CONTEXT_TYPE, inserted_id),
+        )
+        conn.commit()
+        return _memory_context_from_json(raw_payload)
+    finally:
+        conn.close()
+
+
 def update_stock_memory_context_sync(
     *,
     db_path: str,

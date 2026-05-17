@@ -40,7 +40,7 @@
     --chat-section-gap: 10px;
     --chat-card-radius: 22px;
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     gap: var(--chat-section-gap);
     align-content: stretch;
     padding: var(--chat-top-padding) var(--chat-inline-padding) var(--chat-bottom-padding);
@@ -96,6 +96,131 @@
   }
   .chat-toolbar-note:empty {
     display: none;
+  }
+  .chat-memory-card {
+    display: grid;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: var(--chat-card-radius);
+    border: 1px solid var(--border-color);
+    background:
+      linear-gradient(135deg, rgba(37, 99, 235, 0.08), transparent 48%),
+      var(--bg-elevated);
+    box-shadow: var(--shadow-soft);
+  }
+  .chat-memory-card[hidden] {
+    display: none;
+  }
+  .chat-memory-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .chat-memory-title {
+    display: grid;
+    gap: 2px;
+  }
+  .chat-memory-title strong {
+    font-size: 14px;
+    line-height: 1.2;
+  }
+  .chat-memory-title span {
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .chat-memory-action {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--color-brand);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .chat-memory-body {
+    display: grid;
+    gap: 10px;
+  }
+  .chat-memory-summary {
+    margin: 0;
+    line-height: 1.7;
+    color: var(--text-primary);
+    white-space: pre-wrap;
+  }
+  .chat-memory-summary.is-collapsed {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+  }
+  .chat-memory-expand {
+    justify-self: flex-start;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .chat-memory-expand[hidden] {
+    display: none;
+  }
+  .chat-memory-form {
+    display: grid;
+    gap: 10px;
+  }
+  .chat-memory-form[hidden] {
+    display: none;
+  }
+  .chat-memory-form textarea {
+    width: 100%;
+    min-height: 96px;
+    resize: vertical;
+    padding: 12px 14px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font: inherit;
+    line-height: 1.6;
+  }
+  .chat-memory-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .chat-memory-status {
+    min-height: 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .chat-memory-status:empty {
+    display: none;
+  }
+  .chat-memory-status.is-error {
+    color: var(--color-cost);
+  }
+  .chat-memory-buttons {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .chat-memory-meta {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  .chat-empty-hint {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+    margin-top: 4px;
   }
   .chat-stock-backdrop {
     position: fixed;
@@ -328,6 +453,20 @@
     color: var(--color-cost);
   }
   @media (max-width: 768px) {
+    .chat-memory-card {
+      padding: 14px;
+    }
+    .chat-memory-actions {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .chat-memory-buttons {
+      width: 100%;
+      margin-left: 0;
+    }
+    .chat-memory-buttons .button {
+      flex: 1 1 0%;
+    }
     .chat-stock-menu {
       position: fixed;
       top: auto;
@@ -379,6 +518,48 @@
     <div class="chat-toolbar-note" id="chat-page-message" aria-live="polite"></div>
   </section>
 
+  <section
+    class="chat-memory-card"
+    id="chat-memory-card"
+    {% if not selected_memory_context or not selected_memory_context.summary %}hidden{% endif %}
+  >
+    <div class="chat-memory-head">
+      <div class="chat-memory-title">
+        <strong>AI 记忆</strong>
+        <span>这只股票里，AI 当前记住的长期背景</span>
+      </div>
+      <button class="chat-memory-action" type="button" id="chat-memory-edit-button">编辑</button>
+    </div>
+    <div class="chat-memory-body" id="chat-memory-read-view">
+      <p
+        class="chat-memory-summary{% if selected_memory_context and selected_memory_context.summary and selected_memory_context.summary|length > 80 %} is-collapsed{% endif %}"
+        id="chat-memory-summary"
+      >{{ selected_memory_context.summary if selected_memory_context else "" }}</p>
+      <button
+        class="chat-memory-expand"
+        type="button"
+        id="chat-memory-expand-button"
+        {% if not selected_memory_context or not selected_memory_context.summary or selected_memory_context.summary|length <= 80 %}hidden{% endif %}
+      >展开</button>
+      <div class="chat-memory-meta" id="chat-memory-meta">
+        {% if selected_memory_context and selected_memory_context.summary %}
+          {% if selected_memory_context.updated_from == "manual" %}你已手动编辑{% else %}自动整理{% endif %}
+          {% if selected_memory_context.updated_at %} · 更新于 {{ selected_memory_context.updated_at[5:16]|replace("T", " ") }}{% endif %}
+        {% endif %}
+      </div>
+    </div>
+    <form class="chat-memory-form" id="chat-memory-form" hidden>
+      <textarea id="chat-memory-input" maxlength="200">{% if selected_memory_context %}{{ selected_memory_context.summary }}{% endif %}</textarea>
+      <div class="chat-memory-actions">
+        <div class="chat-memory-status" id="chat-memory-status"></div>
+        <div class="chat-memory-buttons">
+          <button class="button secondary" type="button" id="chat-memory-cancel-button">取消</button>
+          <button class="button" type="submit" id="chat-memory-save-button">保存</button>
+        </div>
+      </div>
+    </form>
+  </section>
+
   <section class="chat-thread" id="chat-thread">
     {% if selected_conversation %}
       {% if not selected_messages %}
@@ -400,6 +581,7 @@
               <span>{% if selected_stock and selected_stock.cost_price and selected_stock.cost_price > 0 %}结合你的成本位评估风险{% else %}围绕关键价位做追问{% endif %}</span>
             </button>
           </div>
+          <p class="chat-empty-hint">聊几轮后，AI 会自动记住你对这只股票的持仓背景和关注点</p>
         </div>
       </div>
       {% endif %}
@@ -487,6 +669,17 @@
   const stockMenu = document.getElementById("chat-stock-menu");
   const stockBackdrop = document.getElementById("chat-stock-backdrop");
   const chatPageMessage = document.getElementById("chat-page-message");
+  const chatMemoryCard = document.getElementById("chat-memory-card");
+  const chatMemoryReadView = document.getElementById("chat-memory-read-view");
+  const chatMemoryForm = document.getElementById("chat-memory-form");
+  const chatMemorySummary = document.getElementById("chat-memory-summary");
+  const chatMemoryMeta = document.getElementById("chat-memory-meta");
+  const chatMemoryExpandButton = document.getElementById("chat-memory-expand-button");
+  const chatMemoryEditButton = document.getElementById("chat-memory-edit-button");
+  const chatMemoryInput = document.getElementById("chat-memory-input");
+  const chatMemoryCancelButton = document.getElementById("chat-memory-cancel-button");
+  const chatMemorySaveButton = document.getElementById("chat-memory-save-button");
+  const chatMemoryStatus = document.getElementById("chat-memory-status");
   const chatForm = document.getElementById("chat-form");
   const chatFormMessage = document.getElementById("chat-form-message");
   const chatThread = document.getElementById("chat-thread");
@@ -498,10 +691,75 @@
   const selectedStockReady = "{{ '1' if selected_conversation else '' }}" === "1";
   const totalStockCount = {{ stocks|length }};
   const readyStockCodes = [{% for item in stocks if item.status == "ready" %}"{{ item.stock_code }}"{% if not loop.last %}, {% endif %}{% endfor %}];
+  const initialMemorySummary = {{ (selected_memory_context.summary if selected_memory_context else "") | tojson }};
+  const initialMemoryUpdatedFrom = {{ (selected_memory_context.updated_from if selected_memory_context else "") | tojson }};
+  const initialMemoryUpdatedAt = {{ (selected_memory_context.updated_at if selected_memory_context else "") | tojson }};
   let chatLayoutSettleTimers = [];
   let chatViewportBaseline = 0;
   let chatViewportWidth = window.innerWidth;
   let pendingAssistantBubble = null;
+  let memorySummaryValue = initialMemorySummary || "";
+  let memoryUpdatedFromValue = initialMemoryUpdatedFrom || "";
+  let memoryUpdatedAtValue = initialMemoryUpdatedAt || "";
+  let memoryExpanded = false;
+
+  function formatMemoryUpdatedAt(rawValue) {
+    const value = String(rawValue || "").trim();
+    if (!value) {
+      return "";
+    }
+    if (value.length >= 16) {
+      return value.slice(5, 16).replace("T", " ");
+    }
+    return value;
+  }
+
+  function memoryMetaText(updatedFrom, updatedAt) {
+    if (!memorySummaryValue) {
+      return "";
+    }
+    const prefix = updatedFrom === "manual" ? "你已手动编辑" : "自动整理";
+    const updatedLabel = formatMemoryUpdatedAt(updatedAt);
+    return updatedLabel ? `${prefix} · 更新于 ${updatedLabel}` : prefix;
+  }
+
+  function setMemoryEditing(editing) {
+    if (!chatMemoryCard || !chatMemoryReadView || !chatMemoryForm || !chatMemoryEditButton || !chatMemoryInput) {
+      return;
+    }
+    chatMemoryReadView.hidden = editing;
+    chatMemoryForm.hidden = !editing;
+    chatMemoryEditButton.hidden = editing;
+    if (editing) {
+      chatMemoryInput.value = memorySummaryValue;
+      chatMemoryInput.focus();
+      chatMemoryInput.setSelectionRange(chatMemoryInput.value.length, chatMemoryInput.value.length);
+    }
+    scheduleChatLayoutSettle();
+  }
+
+  function renderMemoryCard() {
+    if (!chatMemoryCard || !chatMemorySummary || !chatMemoryMeta || !chatMemoryExpandButton || !chatMemoryEditButton) {
+      return;
+    }
+    const hasMemory = Boolean(memorySummaryValue.trim());
+    chatMemoryCard.hidden = !hasMemory;
+    if (!hasMemory) {
+      return;
+    }
+    chatMemorySummary.textContent = memorySummaryValue;
+    const shouldCollapse = memorySummaryValue.length > 80;
+    chatMemorySummary.classList.toggle("is-collapsed", shouldCollapse && !memoryExpanded);
+    chatMemoryExpandButton.hidden = !shouldCollapse;
+    chatMemoryExpandButton.textContent = memoryExpanded ? "收起" : "展开";
+    chatMemoryMeta.textContent = memoryMetaText(memoryUpdatedFromValue, memoryUpdatedAtValue);
+    chatMemoryEditButton.hidden = false;
+    if (chatMemoryStatus) {
+      chatMemoryStatus.textContent = "";
+      chatMemoryStatus.classList.remove("is-error");
+    }
+    scheduleChatLayoutSettle();
+  }
 
   function setStockMenuOpen(open) {
     if (!stockMenu || !stockBackdrop) {
@@ -682,6 +940,29 @@
     });
   });
 
+  if (chatMemoryExpandButton) {
+    chatMemoryExpandButton.addEventListener("click", () => {
+      memoryExpanded = !memoryExpanded;
+      renderMemoryCard();
+    });
+  }
+
+  if (chatMemoryEditButton) {
+    chatMemoryEditButton.addEventListener("click", () => {
+      setMemoryEditing(true);
+    });
+  }
+
+  if (chatMemoryCancelButton) {
+    chatMemoryCancelButton.addEventListener("click", () => {
+      if (chatMemoryStatus) {
+        chatMemoryStatus.textContent = "";
+        chatMemoryStatus.classList.remove("is-error");
+      }
+      setMemoryEditing(false);
+    });
+  }
+
   function appendBubble(role, content, actualModelName, options) {
     if (!chatThread) {
       return null;
@@ -735,6 +1016,8 @@
     scrollThreadToBottom("auto");
   }
 
+  renderMemoryCard();
+
   if (chatInput) {
     resizeComposerInput();
     chatInput.addEventListener("input", () => {
@@ -760,6 +1043,9 @@
     });
     if (chatToolbar) {
       resizeObserver.observe(chatToolbar);
+    }
+    if (chatMemoryCard) {
+      resizeObserver.observe(chatMemoryCard);
     }
     if (chatComposer) {
       resizeObserver.observe(chatComposer);
@@ -820,6 +1106,44 @@
       chatFormMessage.classList.remove("is-error");
       chatInput.focus();
       resizeComposerInput();
+    });
+  }
+
+  if (chatMemoryForm && chatMemoryInput && chatMemorySaveButton && selectedStockCode) {
+    chatMemoryForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const summary = chatMemoryInput.value.trim();
+      if (!summary) {
+        chatMemoryStatus.textContent = "记忆内容不能为空";
+        chatMemoryStatus.classList.add("is-error");
+        return;
+      }
+      chatMemorySaveButton.disabled = true;
+      chatMemorySaveButton.textContent = "保存中";
+      chatMemoryCancelButton.disabled = true;
+      chatMemoryStatus.textContent = "";
+      chatMemoryStatus.classList.remove("is-error");
+      const response = await fetch(`/api/chat/${encodeURIComponent(selectedStockCode)}/memory`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ summary })
+      });
+      const data = await response.json().catch(() => ({}));
+      chatMemorySaveButton.disabled = false;
+      chatMemorySaveButton.textContent = "保存";
+      chatMemoryCancelButton.disabled = false;
+      if (!response.ok) {
+        chatMemoryStatus.textContent = data.detail || "保存失败";
+        chatMemoryStatus.classList.add("is-error");
+        scheduleChatLayoutSettle();
+        return;
+      }
+      memorySummaryValue = String(data.summary || "").trim();
+      memoryUpdatedFromValue = String(data.updated_from || "");
+      memoryUpdatedAtValue = String(data.updated_at || "");
+      memoryExpanded = false;
+      renderMemoryCard();
+      setMemoryEditing(false);
     });
   }
 

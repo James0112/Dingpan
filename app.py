@@ -32,7 +32,7 @@ from src.fetch_data import DataFetchError, fetch_market_data
 from src.fetch_news import fetch_news
 from src.analyze import AnalysisError, analyze_market_data
 from src.mailer import MailerError, render_template, send_resend_email
-from src.memory import load_stock_memory_context, update_stock_memory_context_sync
+from src.memory import load_stock_memory_context, save_manual_memory, update_stock_memory_context_sync
 from src.personalize import PersonalizedAnalysisError, generate_personalized_analysis
 from src.push import (
     PushError,
@@ -162,6 +162,10 @@ class ConversationCreatePayload(BaseModel):
 
 class ConversationMessagePayload(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
+
+
+class ChatMemoryPayload(BaseModel):
+    summary: str = Field(min_length=1, max_length=200)
 
 
 def _normalize_stock_code(stock_code: str) -> str:
@@ -1735,6 +1739,7 @@ async def chat_page(request: Request, stock: str = "", stock_code: str = "", use
     selected_conversation = None
     selected_messages: list[dict[str, object]] = []
     selected_chat_context: dict[str, str] = {"trade_date": "", "prompt_context": ""}
+    selected_memory_context = None
     selected_stock = next((item for item in stocks if str(item["stock_code"]) == selected_stock_code), None)
     if selected_stock is not None and str(selected_stock["status"]) == "ready":
         conversation_id = int(selected_stock["conversation_id"] or 0)
@@ -1756,6 +1761,11 @@ async def chat_page(request: Request, stock: str = "", stock_code: str = "", use
             "latest_trade_date": str(selected_chat_context["trade_date"] or selected_stock["latest_trade_date"] or ""),
         }
         selected_messages = await _load_conversation_messages(conversation_id)
+        selected_memory_context = await load_stock_memory_context(
+            db_path=settings.db_path,
+            user_id=user.id,
+            stock_code=str(selected_stock["stock_code"]),
+        )
     return templates.TemplateResponse(
         request,
         "chat.html",
@@ -1768,6 +1778,7 @@ async def chat_page(request: Request, stock: str = "", stock_code: str = "", use
             selected_conversation=selected_conversation,
             selected_messages=selected_messages,
             selected_chat_context=selected_chat_context,
+            selected_memory_context=selected_memory_context,
             stock_query_present=bool(requested_stock),
         ),
     )
@@ -2329,6 +2340,41 @@ async def conversation_message_create(
             "created_at": str(assistant_message_row["created_at"] or "") if assistant_message_row else "",
             "created_at_label": _format_message_time_label(str(assistant_message_row["created_at"] or "")) if assistant_message_row else "",
         },
+    }
+
+
+@app.post("/api/chat/{stock_code}/memory")
+async def chat_memory_save(stock_code: str, payload: ChatMemoryPayload, user=Depends(verified_user)):
+    normalized_stock_code = _normalize_stock_code(stock_code)
+    summary = payload.summary.strip()
+    if not summary:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="记忆内容不能为空")
+    conversation_row = await fetch_one(
+        settings.db_path,
+        """
+        SELECT c.id
+        FROM conversations c
+        WHERE c.user_id = ? AND c.stock_code = ? AND c.conversation_type = 'stock' AND c.model_id = ?
+        ORDER BY c.updated_at DESC, c.id DESC
+        LIMIT 1
+        """,
+        (user.id, normalized_stock_code, user.preferred_model),
+    )
+    if conversation_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    memory_context = await run_in_threadpool(
+        save_manual_memory,
+        db_path=settings.db_path,
+        user_id=user.id,
+        stock_code=normalized_stock_code,
+        summary=summary,
+        conversation_id=int(conversation_row["id"]),
+    )
+    return {
+        "ok": True,
+        "summary": memory_context.summary,
+        "updated_from": memory_context.updated_from,
+        "updated_at": memory_context.updated_at,
     }
 
 
