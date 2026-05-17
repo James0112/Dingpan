@@ -402,7 +402,7 @@
       .shell {
         min-height: 100vh;
         min-height: 100dvh;
-        padding: calc(var(--safe-area-top) + 12px) 12px 12px;
+        padding: calc(var(--safe-area-top) + 12px) 12px calc(var(--page-bottom-spacing) + 12px);
         display: flex;
         flex-direction: column;
       }
@@ -414,18 +414,22 @@
       }
       .mobile-tab-nav {
         display: block;
-        position: sticky;
+        position: fixed;
+        left: 12px;
+        right: 12px;
         bottom: 0;
         z-index: 50;
-        margin-top: 12px;
         padding-bottom: max(2px, var(--safe-area-bottom));
-        background: linear-gradient(180deg, rgba(245, 245, 247, 0), var(--bg-body) 28%);
+        pointer-events: none;
       }
       [data-theme="dark"] .mobile-tab-nav {
-        background: linear-gradient(180deg, rgba(18, 18, 18, 0), var(--bg-body) 28%);
+        background: transparent;
       }
       .mobile-tab-bar {
         display: grid;
+        width: min(100%, 672px);
+        margin: 0 auto;
+        pointer-events: auto;
       }
       .tab-link,
       .tab-action {
