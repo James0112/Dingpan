@@ -216,6 +216,12 @@
     font-size: 12px;
     line-height: 1.4;
   }
+  .chat-memory-placeholder {
+    padding: 0 4px;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
   .chat-empty-hint {
     color: var(--text-muted);
     font-size: 12px;
@@ -426,7 +432,8 @@
     border: 1px solid var(--border-color);
     background: var(--bg-elevated);
     scrollbar-width: none;
-    white-space: nowrap;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
   .chat-composer textarea::-webkit-scrollbar {
     width: 0;
@@ -559,6 +566,11 @@
       </div>
     </form>
   </section>
+  {% if selected_conversation and (not selected_memory_context or not selected_memory_context.summary) and selected_memory_messages_remaining > 0 %}
+  <div class="chat-memory-placeholder">
+    再聊 {{ selected_memory_messages_remaining }} 轮后，AI 会开始记住你对这只股票的持仓背景和关注点。
+  </div>
+  {% endif %}
 
   <section class="chat-thread" id="chat-thread">
     {% if selected_conversation %}

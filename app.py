@@ -32,7 +32,12 @@ from src.fetch_data import DataFetchError, fetch_market_data
 from src.fetch_news import fetch_news
 from src.analyze import AnalysisError, analyze_market_data
 from src.mailer import MailerError, render_template, send_resend_email
-from src.memory import load_stock_memory_context, save_manual_memory, update_stock_memory_context_sync
+from src.memory import (
+    MEMORY_USER_MESSAGE_THRESHOLD,
+    load_stock_memory_context,
+    save_manual_memory,
+    update_stock_memory_context_sync,
+)
 from src.personalize import PersonalizedAnalysisError, generate_personalized_analysis
 from src.push import (
     PushError,
@@ -1740,6 +1745,7 @@ async def chat_page(request: Request, stock: str = "", stock_code: str = "", use
     selected_messages: list[dict[str, object]] = []
     selected_chat_context: dict[str, str] = {"trade_date": "", "prompt_context": ""}
     selected_memory_context = None
+    selected_memory_messages_remaining = 0
     selected_stock = next((item for item in stocks if str(item["stock_code"]) == selected_stock_code), None)
     if selected_stock is not None and str(selected_stock["status"]) == "ready":
         conversation_id = int(selected_stock["conversation_id"] or 0)
@@ -1761,6 +1767,8 @@ async def chat_page(request: Request, stock: str = "", stock_code: str = "", use
             "latest_trade_date": str(selected_chat_context["trade_date"] or selected_stock["latest_trade_date"] or ""),
         }
         selected_messages = await _load_conversation_messages(conversation_id)
+        user_message_count = sum(1 for item in selected_messages if str(item.get("role")) == "user")
+        selected_memory_messages_remaining = max(0, MEMORY_USER_MESSAGE_THRESHOLD - user_message_count)
         selected_memory_context = await load_stock_memory_context(
             db_path=settings.db_path,
             user_id=user.id,
@@ -1779,6 +1787,7 @@ async def chat_page(request: Request, stock: str = "", stock_code: str = "", use
             selected_messages=selected_messages,
             selected_chat_context=selected_chat_context,
             selected_memory_context=selected_memory_context,
+            selected_memory_messages_remaining=selected_memory_messages_remaining,
             stock_query_present=bool(requested_stock),
         ),
     )
