@@ -7,6 +7,7 @@
     margin: 0 auto;
     display: grid;
     gap: 16px;
+    padding-bottom: 0;
   }
   .page-title {
     font-size: 32px;
@@ -289,6 +290,9 @@
     align-items: center;
   }
   @media (max-width: 640px) {
+    .settings-shell {
+      padding-bottom: calc(var(--tab-bar-height) / 2);
+    }
     body.model-sheet-open {
       overflow: hidden;
     }
