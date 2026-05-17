@@ -290,32 +290,35 @@
     <div class="report-status-copy" id="personalized-status-copy">
       {% if personalized_state == "ready" %}
       已合并你的投资画像与持仓成本，当前页面展示的是共享分析 + 个性化建议。
+      {% elif personalized_state == "generating_first" %}
+      首次生成个性化建议中，共享分析已可查看。
+      {% elif personalized_state == "generating_refresh" %}
+      画像已更新，正在按最新画像重新生成个性化建议。
       {% elif personalized_state == "failed" %}
       个性化建议生成失败。{% if personalized_error_message %}{{ personalized_error_message }}{% else %}可以手动重试。{% endif %}
       {% else %}
-      正在基于你的投资画像与当前持仓生成个性化建议。共享分析已可查看，页面会自动刷新状态。
+      个性化建议生成中，页面会自动刷新状态。
       {% endif %}
     </div>
     {% if personalized_state == "ready" %}
     <div class="report-status-note">
       当前画像：{{ profile.risk_preference or "未设风险偏好" }} · {{ profile.trading_style or "未设交易风格" }}{% if profile.focus_sectors %} · {{ profile.focus_sectors[:3]|join(" / ") }}{% endif %}
     </div>
-    <div class="report-status-note">
-      已应用画像版本：v{{ personalized_applied_context_version }} / 当前画像版本：v{{ profile.context_version }}
-    </div>
     {% elif personalized_state == "failed" %}
     <div class="report-status-note">
       可以先修改画像再重新生成；如果画像不需要调整，也可以直接点“重新生成”再试一次。
     </div>
+    {% elif personalized_state == "generating_refresh" %}
     <div class="report-status-note">
-      已应用画像版本：v{{ personalized_applied_context_version }} / 当前画像版本：v{{ profile.context_version }}
+      当前共享分析仍可先查看，新的个性化建议完成后页面会自动更新。
+    </div>
+    {% elif personalized_state == "generating_first" %}
+    <div class="report-status-note">
+      你可以先看共享摘要与风险提示，个性化建议生成完成后会自动替换。
     </div>
     {% else %}
     <div class="report-status-note">
-      如果刚改过画像，这一轮会按最新 `context_version` 重新生成。
-    </div>
-    <div class="report-status-note">
-      已应用画像版本：v{{ personalized_applied_context_version }} / 当前画像版本：v{{ profile.context_version }}
+      当前共享分析仍可先查看，个性化建议生成完成后会自动替换。
     </div>
     {% endif %}
   </section>
@@ -405,8 +408,14 @@
       <p style="line-height:1.85;color:var(--text-secondary);margin:0 0 12px;">
         {% if personalized_state == "ready" and personalized %}
         {{ personalized.action_advice }}
+        {% elif personalized_state == "generating_first" %}
+        个性化操作建议正在生成，可先查看共享风险提示。
+        {% elif personalized_state == "generating_refresh" %}
+        正在按最新画像重新生成操作建议，可先查看共享风险提示。
+        {% elif personalized_state == "failed" %}
+        个性化建议生成失败，可重试或先参考共享风险提示。
         {% else %}
-        完成画像设置后可获取结合持仓与风格的个性化操作建议。
+        个性化操作建议生成中，可先查看共享风险提示。
         {% endif %}
       </p>
       <div class="stack">

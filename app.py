@@ -1488,6 +1488,7 @@ async def report_page(
         profile=profile,
     )
     if personalized_state["state"] in {"missing", "stale"}:
+        next_state = "generating_first" if personalized_state["state"] == "missing" else "generating_refresh"
         await _queue_personalized_generation(
             background_tasks,
             user_id=user.id,
@@ -1498,7 +1499,7 @@ async def report_page(
             profile=profile,
         )
         personalized_state = {
-            "state": "generating",
+            "state": next_state,
             "result": None,
             "error_message": "",
             "applied_context_version": int(personalized_state["applied_context_version"]),
