@@ -2,20 +2,30 @@
 
 {% block content %}
 <style>
+  html,
+  body {
+    height: 100%;
+  }
   .shell {
     width: 100%;
     max-width: none;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
     padding-bottom: 0;
+    overflow: hidden;
   }
   .page-body {
-    min-height: calc(100dvh - 160px - var(--safe-area-bottom));
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
   }
   .chat-page {
     position: relative;
     display: flex;
     flex-direction: column;
-    height: calc(100dvh - 160px - var(--safe-area-bottom));
-    min-height: 560px;
+    height: 100%;
+    min-height: 0;
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: 24px 24px 0 0;
@@ -188,6 +198,7 @@
     line-height: 1.7;
   }
   .chat-composer {
+    flex: 0 0 auto;
     display: grid;
     gap: 10px;
     padding: 14px 16px calc(14px + var(--safe-area-bottom));
@@ -217,11 +228,7 @@
     color: var(--color-cost);
   }
   @media (max-width: 768px) {
-    .page-body {
-      min-height: calc(100dvh - 128px - var(--safe-area-bottom));
-    }
     .chat-page {
-      height: calc(100dvh - 128px - var(--safe-area-bottom));
       border-radius: 20px 20px 0 0;
     }
     .chat-stock-menu {
@@ -350,6 +357,7 @@
   const stockQueryPresent = "{{ '1' if stock_query_present else '' }}" === "1";
   const selectedStockReady = "{{ '1' if selected_conversation else '' }}" === "1";
   const readyStockCodes = [{% for item in stocks if item.status == "ready" %}"{{ item.stock_code }}"{% if not loop.last %}, {% endif %}{% endfor %}];
+  const selectableStockCount = readyStockCodes.length;
 
   function setStockMenuOpen(open) {
     if (!stockMenu || !stockBackdrop) {
@@ -370,7 +378,7 @@
     try {
       const remembered = window.localStorage.getItem(CHAT_LAST_STOCK_KEY) || "";
       if (remembered && remembered !== selectedStockCode && readyStockCodes.includes(remembered)) {
-        window.location.replace(`/chat?stock=${encodeURIComponent(remembered)}`);
+        window.location.replace(`/chat?stock_code=${encodeURIComponent(remembered)}`);
       }
     } catch (error) {
     }
@@ -385,6 +393,11 @@
 
   if (stockTrigger) {
     stockTrigger.addEventListener("click", () => {
+      if (selectableStockCount <= 1) {
+        chatFormMessage.textContent = "当前只有一只可对话股票";
+        chatFormMessage.classList.remove("is-error");
+        return;
+      }
       setStockMenuOpen(true);
     });
   }
@@ -403,7 +416,7 @@
         window.localStorage.setItem(CHAT_LAST_STOCK_KEY, nextStockCode);
       } catch (error) {
       }
-      window.location.href = `/chat?stock=${encodeURIComponent(nextStockCode)}`;
+      window.location.href = `/chat?stock_code=${encodeURIComponent(nextStockCode)}`;
     });
   });
 
