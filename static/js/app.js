@@ -122,7 +122,7 @@ function bindViewportKeyboardBehavior() {
     const tabBarHeight = mobileTabNav.offsetHeight || 0;
     if (tabBarHeight > 0) {
       root.style.setProperty("--tab-bar-height", `${tabBarHeight}px`);
-      root.style.setProperty("--page-bottom-safe-spacing", `${tabBarHeight + 24}px`);
+      root.style.setProperty("--page-bottom-safe-spacing", `${tabBarHeight + 16}px`);
     }
   };
 
