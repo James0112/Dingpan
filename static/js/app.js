@@ -98,6 +98,22 @@ function bindThemeToggle() {
 function bindViewportKeyboardBehavior() {
   const root = document.documentElement;
   const mobileTabNav = document.querySelector(".mobile-tab-nav");
+  let settleTimer = null;
+
+  const isTextInputActive = () => {
+    const active = document.activeElement;
+    if (!active) {
+      return false;
+    }
+    if (active.tagName === "TEXTAREA") {
+      return true;
+    }
+    if (active.tagName !== "INPUT") {
+      return false;
+    }
+    const type = (active.getAttribute("type") || "text").toLowerCase();
+    return !["checkbox", "radio", "button", "submit", "reset", "file", "range", "color"].includes(type);
+  };
 
   const updateTabBarMetrics = () => {
     if (!mobileTabNav) {
@@ -113,12 +129,14 @@ function bindViewportKeyboardBehavior() {
   const updateViewportState = () => {
     if (!window.visualViewport) {
       root.style.setProperty("--viewport-bottom-offset", "0px");
+      document.body.classList.remove("keyboard-open");
       updateTabBarMetrics();
       return;
     }
 
     const viewport = window.visualViewport;
-    const keyboardOpen = viewport.height < window.innerHeight * 0.75;
+    const keyboardOpenByViewport = viewport.height < window.innerHeight * 0.75;
+    const keyboardOpen = keyboardOpenByViewport && isTextInputActive();
     document.body.classList.toggle("keyboard-open", keyboardOpen);
 
     const viewportBottomOffset = keyboardOpen
@@ -126,6 +144,16 @@ function bindViewportKeyboardBehavior() {
       : 0;
     root.style.setProperty("--viewport-bottom-offset", `${viewportBottomOffset}px`);
     updateTabBarMetrics();
+  };
+
+  const scheduleViewportSettle = () => {
+    if (settleTimer) {
+      window.clearTimeout(settleTimer);
+    }
+    settleTimer = window.setTimeout(() => {
+      updateViewportState();
+      window.requestAnimationFrame(updateViewportState);
+    }, 120);
   };
 
   if (!window.visualViewport) {
@@ -137,6 +165,8 @@ function bindViewportKeyboardBehavior() {
   window.visualViewport.addEventListener("scroll", updateViewportState);
   window.addEventListener("resize", updateViewportState);
   window.addEventListener("orientationchange", updateViewportState);
+  document.addEventListener("focusin", scheduleViewportSettle);
+  document.addEventListener("focusout", scheduleViewportSettle);
   updateViewportState();
 }
 
