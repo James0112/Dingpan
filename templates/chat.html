@@ -186,11 +186,23 @@
     width: 0;
     height: 0;
   }
-  .chat-bubble {
-    display: inline-flex;
+  .chat-message {
+    display: flex;
     flex-direction: column;
     gap: 6px;
     max-width: min(100%, 760px);
+  }
+  .chat-message.user {
+    align-self: flex-end;
+    align-items: flex-end;
+  }
+  .chat-message.assistant {
+    align-self: flex-start;
+    align-items: flex-start;
+  }
+  .chat-bubble {
+    display: inline-flex;
+    flex-direction: column;
     padding: 10px 16px;
     border-radius: 18px;
     border: 1px solid var(--border-color);
@@ -204,7 +216,6 @@
     border-color: rgba(59, 130, 246, 0.20);
   }
   .chat-bubble.assistant {
-    align-self: flex-start;
   }
   .chat-bubble.is-pending {
     color: var(--text-secondary);
@@ -212,6 +223,8 @@
   .chat-bubble-meta {
     color: var(--text-muted);
     font-size: 12px;
+    line-height: 1.4;
+    padding: 0 4px;
   }
   .chat-empty {
     flex: 1;
@@ -346,12 +359,14 @@
   <section class="chat-thread" id="chat-thread">
     {% if selected_conversation %}
       {% for item in selected_messages %}
-      <article class="chat-bubble {{ item.role }}">
-        <div>{{ item.content }}</div>
+      <article class="chat-message {{ item.role }}">
+        <div class="chat-bubble {{ item.role }}">
+          <div>{{ item.content }}</div>
+        </div>
         {% if item.created_at or (item.role == "assistant" and item.actual_model_name) %}
         <div class="chat-bubble-meta">
-          {% if item.created_at %}<span>{{ item.created_at[11:16] }}</span>{% endif %}
-          {% if item.role == "assistant" and item.actual_model_name %}<span>{{ item.actual_model_name }}</span>{% endif %}
+          {% if item.created_at %}<span>{{ item.created_at[:19] }}</span>{% endif %}
+          {% if item.role == "assistant" and item.actual_model_name %}<span> · {{ item.actual_model_name }}</span>{% endif %}
         </div>
         {% endif %}
       </article>
@@ -461,18 +476,34 @@
   function formatMessageTime(rawValue) {
     if (!rawValue) {
       const now = new Date();
-      return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      return [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, "0"),
+        String(now.getDate()).padStart(2, "0")
+      ].join("-") + " " + [
+        String(now.getHours()).padStart(2, "0"),
+        String(now.getMinutes()).padStart(2, "0"),
+        String(now.getSeconds()).padStart(2, "0")
+      ].join(":");
     }
     const value = String(rawValue).trim();
     if (!value) {
       return "";
     }
-    if (value.length >= 16 && value[10] === " ") {
-      return value.slice(11, 16);
+    if (value.length >= 19 && value[10] === " ") {
+      return value.slice(0, 19);
     }
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) {
-      return `${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
+      return [
+        parsed.getFullYear(),
+        String(parsed.getMonth() + 1).padStart(2, "0"),
+        String(parsed.getDate()).padStart(2, "0")
+      ].join("-") + " " + [
+        String(parsed.getHours()).padStart(2, "0"),
+        String(parsed.getMinutes()).padStart(2, "0"),
+        String(parsed.getSeconds()).padStart(2, "0")
+      ].join(":");
     }
     return value;
   }
@@ -598,7 +629,9 @@
     if (!chatThread) {
       return null;
     }
-    const bubble = document.createElement("article");
+    const message = document.createElement("article");
+    message.className = `chat-message ${role}`;
+    const bubble = document.createElement("div");
     bubble.className = `chat-bubble ${role}`;
     if (options && options.pending) {
       bubble.classList.add("is-pending");
@@ -607,6 +640,8 @@
     const copy = document.createElement("div");
     copy.textContent = content;
     bubble.appendChild(copy);
+
+    message.appendChild(bubble);
 
     const timeLabel = formatMessageTime(options && options.createdAt ? options.createdAt : "");
     if (timeLabel || (role === "assistant" && actualModelName)) {
@@ -619,15 +654,15 @@
       }
       if (role === "assistant" && actualModelName) {
         const model = document.createElement("span");
-        model.textContent = actualModelName;
+        model.textContent = ` · ${actualModelName}`;
         meta.appendChild(model);
       }
-      bubble.appendChild(meta);
+      message.appendChild(meta);
     }
 
-    chatThread.appendChild(bubble);
+    chatThread.appendChild(message);
     scrollThreadToBottom("smooth");
-    return bubble;
+    return message;
   }
 
   function clearPendingAssistantBubble() {
