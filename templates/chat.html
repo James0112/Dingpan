@@ -47,15 +47,10 @@
     right: var(--chat-side-gap);
     left: var(--chat-side-gap);
     z-index: 3;
-    padding: 10px;
-    border: 1px solid var(--border-color);
-    border-radius: 24px;
-    background: rgba(255, 255, 255, 0.86);
-    backdrop-filter: blur(14px);
-    box-shadow: var(--shadow-soft);
-  }
-  [data-theme="dark"] .chat-toolbar {
-    background: rgba(24, 24, 27, 0.86);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
   }
   .chat-stock-trigger {
     width: 100%;
@@ -70,6 +65,7 @@
     color: var(--text-primary);
     font: inherit;
     text-align: left;
+    box-shadow: var(--shadow-soft);
   }
   .chat-stock-trigger-copy {
     min-width: 0;
@@ -94,6 +90,7 @@
   .chat-toolbar-note {
     min-height: 0;
     margin-top: 6px;
+    padding: 0 4px;
     color: var(--text-muted);
     font-size: 12px;
   }

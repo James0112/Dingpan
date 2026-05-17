@@ -97,10 +97,22 @@ function bindThemeToggle() {
 
 function bindViewportKeyboardBehavior() {
   const root = document.documentElement;
+  const mobileTabNav = document.querySelector(".mobile-tab-nav");
+
+  const updateTabBarMetrics = () => {
+    if (!mobileTabNav) {
+      return;
+    }
+    const tabBarHeight = mobileTabNav.offsetHeight || 0;
+    if (tabBarHeight > 0) {
+      root.style.setProperty("--tab-bar-height", `${tabBarHeight}px`);
+    }
+  };
 
   const updateViewportState = () => {
     if (!window.visualViewport) {
       root.style.setProperty("--viewport-bottom-offset", "0px");
+      updateTabBarMetrics();
       return;
     }
 
@@ -112,6 +124,7 @@ function bindViewportKeyboardBehavior() {
       ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
       : 0;
     root.style.setProperty("--viewport-bottom-offset", `${viewportBottomOffset}px`);
+    updateTabBarMetrics();
   };
 
   if (!window.visualViewport) {
@@ -122,6 +135,7 @@ function bindViewportKeyboardBehavior() {
   window.visualViewport.addEventListener("resize", updateViewportState);
   window.visualViewport.addEventListener("scroll", updateViewportState);
   window.addEventListener("resize", updateViewportState);
+  window.addEventListener("orientationchange", updateViewportState);
   updateViewportState();
 }
 
