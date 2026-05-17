@@ -2,68 +2,147 @@
 
 {% block content %}
 <style>
-  .chat-layout {
+  .chat-shell {
     display: grid;
-    grid-template-columns: 320px minmax(0, 1fr);
     gap: 16px;
   }
-  .chat-sidebar,
-  .chat-main {
+  .chat-panel {
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: 22px;
     box-shadow: var(--shadow-soft);
-  }
-  .chat-sidebar {
-    padding: 18px;
-    display: grid;
-    gap: 14px;
-    align-content: start;
-  }
-  .chat-main {
     padding: 20px;
-    display: grid;
-    gap: 16px;
-    min-height: 70vh;
   }
   .chat-title {
     margin: 0;
     font-size: 34px;
     font-weight: 800;
   }
-  .chat-toolbar {
-    display: grid;
-    gap: 10px;
+  .chat-subtitle {
+    margin: 10px 0 0;
+    color: var(--text-secondary);
+    line-height: 1.7;
   }
-  .conversation-list {
-    display: grid;
-    gap: 10px;
-  }
-  .conversation-link {
-    display: grid;
-    gap: 6px;
-    padding: 14px;
-    border-radius: 16px;
+  .chat-stock-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 18px;
+    border-radius: 18px;
     border: 1px solid var(--border-color);
     background: var(--bg-elevated);
+    color: var(--text-primary);
+    font: inherit;
+    text-align: left;
   }
-  .conversation-link.active {
+  .chat-stock-trigger-copy {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+  .chat-stock-trigger-title {
+    font-size: 22px;
+    font-weight: 800;
+  }
+  .chat-stock-trigger-subtitle {
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+  .chat-stock-caret {
+    color: var(--text-muted);
+    font-size: 24px;
+    line-height: 1;
+  }
+  .chat-stock-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: rgba(4, 6, 16, 0.52);
+    backdrop-filter: blur(10px);
+  }
+  .chat-stock-backdrop[hidden] {
+    display: none;
+  }
+  .chat-stock-menu {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    z-index: 80;
+    width: min(640px, calc(100vw - 24px));
+    max-height: min(72vh, 720px);
+    transform: translate(-50%, -50%);
+    overflow: auto;
+    padding: 18px;
+    border-radius: 24px;
+    border: 1px solid rgba(59, 130, 246, 0.20);
+    background: var(--bg-elevated);
+    box-shadow: var(--shadow-soft);
+  }
+  .chat-stock-menu[hidden] {
+    display: none;
+  }
+  .chat-stock-menu-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .chat-stock-menu-title {
+    font-size: 18px;
+    font-weight: 800;
+  }
+  .chat-stock-menu-list {
+    display: grid;
+    gap: 10px;
+  }
+  .chat-stock-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-surface);
+    color: var(--text-primary);
+    font: inherit;
+    text-align: left;
+  }
+  .chat-stock-option.is-active {
     border-color: rgba(59, 130, 246, 0.28);
     background: rgba(59, 130, 246, 0.08);
   }
-  .conversation-link-title {
+  .chat-stock-option:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .chat-stock-option-copy {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+  .chat-stock-option-title {
+    font-size: 18px;
     font-weight: 800;
   }
-  .conversation-link-copy {
+  .chat-stock-option-subtitle {
     color: var(--text-secondary);
     font-size: 13px;
-    line-height: 1.6;
   }
-  .chat-header {
+  .chat-context {
     display: flex;
-    justify-content: space-between;
-    gap: 12px;
     align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .chat-context-title {
+    margin: 10px 0 4px;
+    font-size: 30px;
+    font-weight: 800;
   }
   .chat-thread {
     display: flex;
@@ -73,7 +152,7 @@
   }
   .chat-bubble {
     width: fit-content;
-    max-width: min(100%, 780px);
+    max-width: min(100%, 760px);
     padding: 14px 16px;
     border-radius: 18px;
     border: 1px solid var(--border-color);
@@ -106,153 +185,206 @@
     display: grid;
     gap: 14px;
     align-content: center;
-    min-height: 50vh;
+    min-height: 40vh;
   }
   @media (max-width: 900px) {
-    .chat-layout {
-      grid-template-columns: 1fr;
-    }
-    .chat-main {
-      min-height: 0;
-    }
     .chat-bubble {
       max-width: 92%;
     }
   }
+  @media (max-width: 640px) {
+    .chat-panel {
+      padding: 18px;
+    }
+    .chat-stock-trigger-title,
+    .chat-context-title,
+    .chat-title {
+      font-size: 24px;
+    }
+    .chat-stock-menu {
+      left: 10px;
+      right: 10px;
+      top: auto;
+      bottom: calc(var(--safe-area-bottom) + 10px);
+      width: auto;
+      max-height: min(68vh, 720px);
+      transform: none;
+      border-radius: 22px;
+    }
+  }
 </style>
 
-<div class="chat-layout">
-  <aside class="chat-sidebar">
-    <div>
-      <h1 class="chat-title">对话</h1>
-      <p class="muted" style="margin:10px 0 0;line-height:1.7;">按当前模型发起普通会话或股票会话。股票会话会自动注入该股票的共享分析。</p>
-    </div>
-
-    <div class="chat-toolbar">
-      <button class="button" type="button" id="new-general-chat">+ 新建普通对话</button>
-      <div class="field">
-        <label for="new-stock-chat-select">新建股票对话</label>
-        <div class="row" style="align-items:stretch;">
-          <select id="new-stock-chat-select">
-            <option value="">选择股票</option>
-            {% for item in subscriptions %}
-            <option value="{{ item.stock_code }}">{{ item.stock_name or item.stock_code }} · {{ item.stock_code }}</option>
-            {% endfor %}
-          </select>
-          <button class="button secondary" type="button" id="new-stock-chat" disabled>进入</button>
+<div class="chat-shell">
+  <section class="chat-panel">
+    <h1 class="chat-title">对话</h1>
+    <p class="chat-subtitle">围绕当前股票的共享分析与持仓策略继续追问。</p>
+    <div style="margin-top:16px;">
+      <button class="chat-stock-trigger" type="button" id="chat-stock-trigger" {% if not stocks %}disabled{% endif %}>
+        <div class="chat-stock-trigger-copy">
+          <div class="chat-stock-trigger-title" id="chat-stock-trigger-title">
+            {% if selected_stock %}{{ selected_stock.stock_name or selected_stock.stock_code }}{% elif stocks %}选择股票{% else %}暂无可聊股票{% endif %}
+          </div>
+          <div class="chat-stock-trigger-subtitle" id="chat-stock-trigger-subtitle">
+            {% if selected_stock %}
+            {{ selected_stock.stock_code }} · {{ selected_stock.status_label }} · {{ user.preferred_model }}
+            {% elif stocks %}
+            选择一只已有共享分析的股票
+            {% else %}
+            先回到自选页并等待报告生成完成
+            {% endif %}
+          </div>
         </div>
-      </div>
-      <div class="message" id="chat-page-message"></div>
+        <span class="chat-stock-caret" aria-hidden="true">⌄</span>
+      </button>
+      <div class="message" id="chat-page-message" style="margin-top:10px;"></div>
     </div>
+  </section>
 
-    <div class="conversation-list" id="conversation-list">
-      {% for item in conversations %}
-      <a
-        class="conversation-link{% if selected_conversation and item.id == selected_conversation.id %} active{% endif %}"
-        href="/chat/{{ item.id }}"
-      >
-        <div class="conversation-link-title">{{ item.title }}</div>
-        <div class="conversation-link-copy">
-          {{ item.model_id }}{% if item.conversation_type == "stock" %} · {{ item.stock_name or item.stock_code }}{% endif %}
-        </div>
-        {% if item.last_message_preview %}
-        <div class="conversation-link-copy">{{ item.last_message_preview }}</div>
-        {% endif %}
-      </a>
-      {% endfor %}
-    </div>
-  </aside>
-
-  <section class="chat-main">
-    {% if selected_conversation %}
-    <div class="chat-header">
+  <section class="chat-panel">
+    {% if selected_conversation and selected_stock %}
+    <div class="chat-context">
       <div>
-        <div class="pill">{% if selected_conversation.conversation_type == "stock" %}股票对话{% else %}普通对话{% endif %}</div>
-        <h2 style="margin:12px 0 6px;">{{ selected_conversation.title }}</h2>
-        <div class="muted">
-          {{ selected_conversation.model_id }}
-          {% if selected_conversation.stock_code %} · {{ selected_conversation.stock_name or selected_conversation.stock_code }}{% endif %}
-        </div>
+        <div class="pill">股票对话</div>
+        <div class="chat-context-title">{{ selected_conversation.stock_name or selected_conversation.stock_code }}</div>
+        <div class="muted">{{ selected_conversation.stock_code }} · {{ selected_conversation.model_id }} · 最近报告 {{ selected_conversation.latest_trade_date or "未知" }}</div>
+      </div>
+      <div class="row" style="justify-content:flex-end;">
+        <a class="button secondary" href="/report/{{ selected_conversation.stock_code }}/latest">查看报告</a>
       </div>
     </div>
 
-    <div class="chat-thread" id="chat-thread">
+    <div class="chat-thread" id="chat-thread" style="margin-top:18px;">
       {% for item in selected_messages %}
       <article class="chat-bubble {{ item.role }}">
         <div>{{ item.content }}</div>
         <div class="chat-bubble-meta">
-          {{ "你" if item.role == "user" else "助手" }}
-          {% if item.role == "assistant" and item.actual_model_name %} · {{ item.actual_model_name }}{% endif %}
+          {{ "你" if item.role == "user" else "助手" }}{% if item.role == "assistant" and item.actual_model_name %} · {{ item.actual_model_name }}{% endif %}
         </div>
       </article>
       {% endfor %}
     </div>
 
-    <form class="chat-composer" id="chat-form" data-conversation-id="{{ selected_conversation.id }}">
+    <form class="chat-composer" id="chat-form" data-conversation-id="{{ selected_conversation.id }}" style="margin-top:18px;">
       <div class="field">
-        <label for="chat-input">继续追问</label>
-        <textarea id="chat-input" placeholder="直接输入你想问的内容，例如：如果我是稳健短线，这里更该等回踩还是先减仓？"></textarea>
+        <label for="chat-input">继续问这只股票</label>
+        <textarea id="chat-input" placeholder="例如：如果我是稳健短线，这里更该等回踩还是先减仓？"></textarea>
       </div>
       <div class="row" style="justify-content:space-between;">
         <div class="message" id="chat-form-message"></div>
         <button class="button" type="submit">发送</button>
       </div>
     </form>
+    {% elif stocks %}
+    <div class="chat-empty">
+      <div class="pill">当前不可进入</div>
+      <h2 style="margin:0;">先选择一只有共享分析的股票</h2>
+      <p class="muted" style="margin:0;line-height:1.8;">当前模型下没有可用共享分析的股票会保持禁用，等报告生成完成后再进入对话。</p>
+    </div>
     {% else %}
     <div class="chat-empty">
-      <div class="pill">阶段三</div>
-      <h2 style="margin:0;">还没有对话</h2>
-      <p class="muted" style="margin:0;line-height:1.8;">先创建一个普通对话，或者选择一只自选股进入股票对话。股票对话会自动附带该股票当前模型的共享分析。</p>
+      <div class="pill">暂无股票</div>
+      <h2 style="margin:0;">还没有可聊股票</h2>
+      <p class="muted" style="margin:0;line-height:1.8;">先去自选页添加股票，并等当前模型下的共享分析生成完成。</p>
     </div>
     {% endif %}
   </section>
 </div>
 
+<div class="chat-stock-backdrop" id="chat-stock-backdrop" hidden></div>
+<div class="chat-stock-menu" id="chat-stock-menu" hidden>
+  <div class="chat-stock-menu-head">
+    <div class="chat-stock-menu-title">选择股票</div>
+    <button class="secondary" type="button" id="chat-stock-menu-close">关闭</button>
+  </div>
+  <div class="chat-stock-menu-list">
+    {% for item in stocks %}
+    <button
+      class="chat-stock-option{% if selected_stock and item.stock_code == selected_stock.stock_code %} is-active{% endif %}"
+      type="button"
+      data-chat-stock-option
+      data-stock-code="{{ item.stock_code }}"
+      {% if item.status != "ready" %}disabled{% endif %}
+    >
+      <div class="chat-stock-option-copy">
+        <div class="chat-stock-option-title">{{ item.stock_name or item.stock_code }}</div>
+        <div class="chat-stock-option-subtitle">{{ item.stock_code }} · {{ item.status_label }}{% if item.latest_trade_date %} · {{ item.latest_trade_date }}{% endif %}</div>
+      </div>
+      {% if selected_stock and item.stock_code == selected_stock.stock_code %}
+      <span class="pill">当前</span>
+      {% endif %}
+    </button>
+    {% endfor %}
+  </div>
+</div>
+
 <script>
+  const CHAT_LAST_STOCK_KEY = "dingpan-last-chat-stock-code";
+  const stockTrigger = document.getElementById("chat-stock-trigger");
+  const stockMenu = document.getElementById("chat-stock-menu");
+  const stockBackdrop = document.getElementById("chat-stock-backdrop");
+  const stockMenuClose = document.getElementById("chat-stock-menu-close");
   const chatPageMessage = document.getElementById("chat-page-message");
-  const newGeneralChatButton = document.getElementById("new-general-chat");
-  const newStockChatButton = document.getElementById("new-stock-chat");
-  const newStockChatSelect = document.getElementById("new-stock-chat-select");
   const chatForm = document.getElementById("chat-form");
   const chatFormMessage = document.getElementById("chat-form-message");
   const chatThread = document.getElementById("chat-thread");
   const chatInput = document.getElementById("chat-input");
+  const selectedStockCode = "{{ selected_stock.stock_code if selected_stock else '' }}";
+  const stockQueryPresent = "{{ '1' if stock_query_present else '' }}" === "1";
+  const readyStockCodes = [{% for item in stocks if item.status == "ready" %}"{{ item.stock_code }}"{% if not loop.last %}, {% endif %}{% endfor %}];
 
-  async function createConversation(payload) {
-    chatPageMessage.textContent = "正在创建对话...";
-    const response = await fetch("/api/conversations", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      chatPageMessage.textContent = data.detail || "创建对话失败";
+  function setStockMenuOpen(open) {
+    if (!stockMenu || !stockBackdrop) {
       return;
     }
-    window.location.href = data.url;
+    stockMenu.hidden = !open;
+    stockBackdrop.hidden = !open;
   }
 
-  if (newGeneralChatButton) {
-    newGeneralChatButton.addEventListener("click", () => {
-      void createConversation({ conversation_type: "general" });
+  if (!stockQueryPresent && readyStockCodes.length > 0) {
+    try {
+      const remembered = window.localStorage.getItem(CHAT_LAST_STOCK_KEY) || "";
+      if (remembered && remembered !== selectedStockCode && readyStockCodes.includes(remembered)) {
+        window.location.replace(`/chat?stock_code=${encodeURIComponent(remembered)}`);
+      }
+    } catch (error) {
+    }
+  }
+
+  if (selectedStockCode) {
+    try {
+      window.localStorage.setItem(CHAT_LAST_STOCK_KEY, selectedStockCode);
+    } catch (error) {
+    }
+  }
+
+  if (stockTrigger) {
+    stockTrigger.addEventListener("click", () => {
+      setStockMenuOpen(true);
     });
   }
-
-  if (newStockChatButton) {
-    const syncStockChatButton = () => {
-      newStockChatButton.disabled = !newStockChatSelect.value;
-    };
-    syncStockChatButton();
-    newStockChatSelect.addEventListener("change", syncStockChatButton);
-    newStockChatButton.addEventListener("click", () => {
-      if (!newStockChatSelect.value) {
-        chatPageMessage.textContent = "先选择一只股票";
+  if (stockMenuClose) {
+    stockMenuClose.addEventListener("click", () => {
+      setStockMenuOpen(false);
+    });
+  }
+  if (stockBackdrop) {
+    stockBackdrop.addEventListener("click", () => {
+      setStockMenuOpen(false);
+    });
+  }
+  document.querySelectorAll("[data-chat-stock-option]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (button.disabled) {
         return;
       }
-      void createConversation({ conversation_type: "stock", stock_code: newStockChatSelect.value });
+      const nextStockCode = button.dataset.stockCode || "";
+      try {
+        window.localStorage.setItem(CHAT_LAST_STOCK_KEY, nextStockCode);
+      } catch (error) {
+      }
+      window.location.href = `/chat?stock_code=${encodeURIComponent(nextStockCode)}`;
     });
-  }
+  });
 
   function appendBubble(role, content, actualModelName) {
     if (!chatThread) {

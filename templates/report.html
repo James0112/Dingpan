@@ -513,7 +513,6 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          conversation_type: "stock",
           stock_code: "{{ market_data.stock_code }}"
         })
       });

@@ -80,7 +80,7 @@ def _build_prompt(
         context_lines.append("当前是普通会话，不注入单只股票共享分析。")
 
     transcript_lines: list[str] = []
-    for message in messages[-10:]:
+    for message in messages[-8:]:
         role = "用户" if message.get("role") == "user" else "助手"
         content = str(message.get("content") or "").strip()
         if content:

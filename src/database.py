@@ -207,6 +207,7 @@ SCHEMA_STATEMENTS = (
     "CREATE INDEX IF NOT EXISTS idx_user_profiles_updated ON user_profiles(updated_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_user_context_lookup ON user_context(user_id, stock_code, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_conversations_user_model ON conversations(user_id, model_id, updated_at DESC)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_stock_unique ON conversations(user_id, model_id, stock_code) WHERE conversation_type = 'stock' AND stock_code <> ''",
     "CREATE INDEX IF NOT EXISTS idx_messages_conversation_created ON messages(conversation_id, created_at ASC)",
     "CREATE INDEX IF NOT EXISTS idx_push_subs_user ON push_subscriptions(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_email_tokens_hash ON email_tokens(token_hash)",
@@ -284,6 +285,19 @@ async def _ensure_schema_migrations(conn: aiosqlite.Connection) -> None:
     await conn.execute("UPDATE personalized_analysis SET model_id = 'gpt5.4' WHERE model_id = 'gpt54'")
     await conn.execute("UPDATE usage_log SET model_id = 'gpt5.4' WHERE model_id = 'gpt54'")
     await conn.execute("UPDATE usage_log SET model_id = 'glm' WHERE model_id = 'glm4'")
+    await conn.execute(
+        """
+        DELETE FROM conversations
+        WHERE conversation_type = 'stock'
+          AND stock_code <> ''
+          AND id NOT IN (
+              SELECT MAX(id)
+              FROM conversations
+              WHERE conversation_type = 'stock' AND stock_code <> ''
+              GROUP BY user_id, model_id, stock_code
+          )
+        """
+    )
 
 
 async def init_db(db_path: str) -> None:
