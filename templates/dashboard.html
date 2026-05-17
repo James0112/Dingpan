@@ -55,6 +55,12 @@
     justify-content: space-between;
     gap: 12px;
   }
+  .page-header-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+  }
   .page-title {
     margin: 0;
     font-size: 32px;
@@ -248,8 +254,7 @@
       padding-bottom: calc(var(--tab-bar-height) * 2 / 3);
     }
     .watch-actions {
-      width: 100%;
-      justify-content: flex-start;
+      display: none;
     }
     .watch-layout {
       flex: 1;
@@ -261,6 +266,9 @@
     }
     .stock-grid {
       align-content: start;
+    }
+    .desktop-only {
+      display: none !important;
     }
     .watch-sidebar {
       display: none;
@@ -276,6 +284,9 @@
   }
   @media (min-width: 900px) {
     .modal-backdrop[data-dialog-mode="mobile"] {
+      display: none !important;
+    }
+    .mobile-only {
       display: none !important;
     }
   }
@@ -304,12 +315,15 @@
             <h1 class="page-title">自选股</h1>
             <p class="page-subtitle">每天只看最重要的结论，点进单只股票再看完整报告。</p>
           </div>
-          <button class="icon-button" type="button" id="dashboard-refresh" aria-label="刷新页面" title="刷新页面">
-            <span class="refresh-icon" aria-hidden="true">↻</span>
-          </button>
+          <div class="page-header-controls">
+            <button class="icon-button mobile-only" type="button" id="dashboard-refresh" aria-label="刷新页面" title="刷新页面">
+              <span class="refresh-icon" aria-hidden="true">↻</span>
+            </button>
+            <button class="button mobile-only" type="button" id="open-add-stock" {% if not is_verified %}disabled{% endif %}>+ 添加</button>
+          </div>
         </div>
-        <div class="watch-actions">
-          <button class="button" type="button" id="open-add-stock" {% if not is_verified %}disabled{% endif %}>+ 添加股票</button>
+        <div class="watch-actions desktop-only">
+          <button class="button" type="button" id="open-add-stock-desktop-inline" {% if not is_verified %}disabled{% endif %}>+ 添加股票</button>
         </div>
       </div>
 
@@ -463,6 +477,7 @@
   const dashboardRefreshButton = document.getElementById("dashboard-refresh");
   const openAddButtons = [
     document.getElementById("open-add-stock"),
+    document.getElementById("open-add-stock-desktop-inline"),
     document.getElementById("open-add-stock-desktop")
   ].filter(Boolean);
 
