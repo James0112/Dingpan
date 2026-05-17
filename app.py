@@ -1263,7 +1263,7 @@ async def dashboard_page(request: Request, user=Depends(page_user_or_redirect)):
             status_label, status_copy = _personalized_dashboard_status(str(personalized_state["state"]))
             item["latest_close_price"] = market_data.snapshot.close_price
             item["latest_change_pct"] = market_data.snapshot.change_pct
-            item["latest_summary"] = analysis.executive_summary
+            item["latest_summary"] = analysis.general_summary
             item["latest_trade_date"] = str(row["latest_trade_date"])
             shared_state = "generating"
             if shared_cache_row is not None:
@@ -1698,7 +1698,7 @@ async def _load_stock_chat_context(stock_code: str, model_id: str) -> str:
             f"交易日：{row['trade_date']}",
             f"收盘价：{market_data.snapshot.close_price:.2f}",
             f"涨跌幅：{market_data.snapshot.change_pct:+.2f}%",
-            f"共享结论：{analysis.executive_summary}",
+            f"共享结论：{analysis.general_summary}",
             f"技术分析：{analysis.technical_analysis}",
             f"资金面：{analysis.fund_flow_analysis}",
             f"消息面：{analysis.news_impact}",

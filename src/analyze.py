@@ -63,14 +63,13 @@ def _build_prompt(market_data: MarketData, news_list: list[NewsItem]) -> str:
 ## 输出要求
 请严格返回以下 JSON 格式，不要包含 markdown 代码块标记，不要有任何前导或后缀文字：
 {{
-  "executive_summary": "2-3句话总结整体判断，不重复具体数字",
+  "general_summary": "2-3句话总结整体盘面判断，不包含具体操作建议，不重复具体数字",
   "market_review": "3-4句话复盘当日盘面节奏，可写具体价格和走势细节",
   "technical_signals": ["信号1", "信号2", "信号3"],
   "technical_analysis": "1段3-5句解释均线结构、MACD阶段、量价关系和近5日趋势",
   "fund_flow_analysis": "2-3句话解读主力资金意图",
   "news_impact": "2-3句话总结近期新闻对股价的潜在影响；如果新闻为空，输出近期无重大新闻",
   "news_sentiment": "positive 或 negative 或 neutral",
-  "action_advice": "面向已有持仓者的操作建议，可补一句未持仓者是否适合追高或等待确认",
   "risk_notes": ["风险1", "风险2"],
   "bias": "bullish 或 bearish 或 neutral",
   "support_price": 10.20,
@@ -81,10 +80,10 @@ def _build_prompt(market_data: MarketData, news_list: list[NewsItem]) -> str:
 1. 若数据不足以支持明确方向，bias 输出 "neutral"，建议输出"观望"
 2. support_price/resistance_price 必须输出纯数字，基于均线、近5日高低点或收盘价附近推导，不要虚构远端价位，也不要输出“10.2附近”这类文字
 3. 不要使用"必涨""必跌""大概率涨停"等确定性表达
-4. 操作建议使用稳健措辞：持有观察、逢高减仓、不追高、若回踩XX企稳可考虑低吸、观望等待
+4. general_summary 只能做客观盘面总结，不得给出针对持仓者或未持仓者的具体操作建议
 5. technical_signals 数组长度 2-4 条
 6. risk_notes 数组长度 1-3 条，每条简洁明确，不要写成长段
-7. executive_summary 负责整体判断，不重复具体数字；market_review 负责盘面节奏，可写具体价格和走势细节
+7. general_summary 负责整体判断，不重复具体数字；market_review 负责盘面节奏，可写具体价格和走势细节
 8. 新闻解读必须基于给定新闻列表，不要编造不存在的事件、政策、财报或产业逻辑
 9. 不要假设用户的仓位比例、现金比例、摊薄成本或加仓历史
 10. 这是股票级共享分析，不要引用任何特定持仓成本或个人交易背景
@@ -113,14 +112,13 @@ def _parse_response(raw_text: str, market_data: MarketData) -> AnalysisResult:
         raise AnalysisError(f"Model returned invalid JSON: {exc}") from exc
 
     required = {
-        "executive_summary",
+        "general_summary",
         "market_review",
         "technical_signals",
         "technical_analysis",
         "fund_flow_analysis",
         "news_impact",
         "news_sentiment",
-        "action_advice",
         "risk_notes",
         "bias",
         "support_price",
@@ -144,14 +142,13 @@ def _parse_response(raw_text: str, market_data: MarketData) -> AnalysisResult:
         raise AnalysisError(f"Invalid news_sentiment value: {news_sentiment}")
 
     return AnalysisResult(
-        executive_summary=str(payload["executive_summary"]).strip(),
+        general_summary=str(payload["general_summary"]).strip(),
         market_review=str(payload["market_review"]).strip(),
         technical_signals=[str(item).strip() for item in technical_signals],
         technical_analysis=str(payload["technical_analysis"]).strip(),
         fund_flow_analysis=str(payload["fund_flow_analysis"]).strip(),
         news_impact=str(payload["news_impact"]).strip(),
         news_sentiment=news_sentiment,
-        action_advice=str(payload["action_advice"]).strip(),
         risk_notes=[str(item).strip() for item in risk_notes],
         bias=bias,
         support_price=_coerce_price(payload, "support_price", market_data),

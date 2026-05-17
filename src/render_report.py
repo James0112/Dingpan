@@ -17,7 +17,7 @@ from src.schemas import (
 )
 
 
-ANALYSIS_VERSION = 1
+ANALYSIS_VERSION = 2
 
 
 def market_data_to_json(market_data: MarketData) -> str:
@@ -98,15 +98,17 @@ def market_data_from_json(raw: str) -> MarketData:
 
 def analysis_result_from_json(raw: str) -> AnalysisResult:
     payload = json.loads(raw)
+    general_summary = payload.get("general_summary")
+    if general_summary is None:
+        general_summary = payload.get("executive_summary") or ""
     return AnalysisResult(
-        executive_summary=str(payload["executive_summary"]),
+        general_summary=str(general_summary),
         market_review=str(payload["market_review"]),
         technical_signals=[str(item) for item in payload["technical_signals"]],
         technical_analysis=str(payload["technical_analysis"]),
         fund_flow_analysis=str(payload["fund_flow_analysis"]),
         news_impact=str(payload["news_impact"]),
         news_sentiment=str(payload["news_sentiment"]),
-        action_advice=str(payload["action_advice"]),
         risk_notes=[str(item) for item in payload["risk_notes"]],
         bias=str(payload["bias"]),
         support_price=float(payload["support_price"]),

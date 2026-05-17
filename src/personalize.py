@@ -52,7 +52,7 @@ def _build_prompt(market_data: MarketData, shared_analysis: AnalysisResult, prof
 {_serialize_profile(profile)}
 
 ## 共享分析结论
-- 共享摘要：{shared_analysis.executive_summary}
+- 共享摘要：{shared_analysis.general_summary}
 - 市场方向：{shared_analysis.bias}
 - 技术信号：{'；'.join(shared_analysis.technical_signals)}
 - 技术分析：{shared_analysis.technical_analysis}

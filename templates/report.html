@@ -259,12 +259,12 @@
   <section class="hero">
     <div class="row" style="justify-content:space-between;align-items:flex-start;">
       <div>
-        <div class="pill">{% if personalized_state == "ready" %}个性化结论{% else %}共享结论{% endif %}</div>
+        <div class="pill">{% if personalized_state == "ready" %}个性化结论{% else %}共享摘要{% endif %}</div>
         <p style="line-height:1.9;margin:16px 0 0;color:var(--text-primary);">
           {% if personalized_state == "ready" and personalized %}
           {{ personalized.executive_summary }}
           {% else %}
-          {{ analysis.executive_summary }}
+          {{ analysis.general_summary }}
           {% endif %}
         </p>
       </div>
@@ -401,12 +401,12 @@
       <p style="line-height:1.85;color:var(--text-secondary);margin:14px 0 0;">{{ analysis.news_impact }}</p>
     </section>
     <section class="card">
-      <p class="section-title">操作建议与风险</p>
+      <p class="section-title">{% if personalized_state == "ready" and personalized %}操作建议与风险{% else %}风险提示{% endif %}</p>
       <p style="line-height:1.85;color:var(--text-secondary);margin:0 0 12px;">
         {% if personalized_state == "ready" and personalized %}
         {{ personalized.action_advice }}
         {% else %}
-        {{ analysis.action_advice }}
+        完成画像设置后可获取结合持仓与风格的个性化操作建议。
         {% endif %}
       </p>
       <div class="stack">

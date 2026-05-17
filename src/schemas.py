@@ -62,14 +62,13 @@ class MarketData:
 
 @dataclass(frozen=True)
 class AnalysisResult:
-    executive_summary: str
+    general_summary: str
     market_review: str
     technical_signals: list[str]
     technical_analysis: str
     fund_flow_analysis: str
     news_impact: str
     news_sentiment: str
-    action_advice: str
     risk_notes: list[str]
     bias: str
     support_price: float
