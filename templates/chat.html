@@ -34,22 +34,19 @@
     overflow: hidden;
   }
   .chat-page.has-chat-layout {
-    --chat-side-gap: 6px;
-    --chat-toolbar-top: 12px;
+    --chat-inline-padding: 6px;
+    --chat-top-padding: 12px;
+    --chat-bottom-padding: calc(var(--page-bottom-spacing) + 6px);
     --chat-section-gap: 10px;
-    --chat-toolbar-height: 74px;
-    --chat-composer-height: 68px;
-    --chat-composer-bottom: calc(var(--page-bottom-spacing) + 6px);
-    --chat-thread-top: 96px;
-    --chat-thread-height: 240px;
     --chat-card-radius: 22px;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: var(--chat-section-gap);
+    align-content: stretch;
+    padding: var(--chat-top-padding) var(--chat-inline-padding) var(--chat-bottom-padding);
   }
   .chat-toolbar {
-    position: absolute;
-    top: var(--chat-toolbar-top);
-    right: var(--chat-side-gap);
-    left: var(--chat-side-gap);
-    z-index: 3;
+    width: 100%;
     padding: 0;
     border: 0;
     background: transparent;
@@ -168,11 +165,8 @@
     font-size: 12px;
   }
   .chat-thread {
-    position: absolute;
-    top: var(--chat-thread-top);
-    right: var(--chat-side-gap);
-    left: var(--chat-side-gap);
-    height: var(--chat-thread-height);
+    width: 100%;
+    min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
@@ -187,9 +181,6 @@
     border: 1px solid var(--border-color);
     border-radius: var(--chat-card-radius);
     box-shadow: var(--shadow-soft);
-  }
-  body.keyboard-open .chat-page.has-chat-layout {
-    --chat-composer-bottom: calc(var(--viewport-bottom-offset) + 2px);
   }
   .chat-thread::-webkit-scrollbar {
     width: 0;
@@ -240,11 +231,7 @@
     line-height: 1.7;
   }
   .chat-composer {
-    position: absolute;
-    right: var(--chat-side-gap);
-    bottom: var(--chat-composer-bottom);
-    left: var(--chat-side-gap);
-    z-index: 3;
+    width: 100%;
     display: grid;
     gap: 6px;
     padding: 6px;
@@ -322,16 +309,10 @@
       padding: 16px 14px;
     }
     .chat-composer {
-      position: fixed;
-      left: var(--chat-side-gap);
-      right: var(--chat-side-gap);
-      bottom: var(--chat-composer-bottom);
-      z-index: 50;
-      width: auto;
       padding: 6px;
     }
-    body.keyboard-open .chat-composer {
-      bottom: calc(var(--viewport-bottom-offset) + 2px);
+    body.keyboard-open .chat-page.has-chat-layout {
+      --chat-bottom-padding: 2px;
     }
     .chat-bubble {
       max-width: 92%;
@@ -435,8 +416,6 @@
 <script>
   const CHAT_LAST_STOCK_KEY = "last_chat_stock_code";
   const chatPage = document.getElementById("chat-page-root");
-  const chatToolbar = document.querySelector(".chat-toolbar");
-  const mobileTabNav = document.querySelector(".mobile-tab-nav");
   const stockTrigger = document.getElementById("chat-stock-trigger");
   const stockMenu = document.getElementById("chat-stock-menu");
   const stockBackdrop = document.getElementById("chat-stock-backdrop");
@@ -472,34 +451,13 @@
     if (!chatPage) {
       return;
     }
-    if (chatToolbar) {
-      chatPage.style.setProperty("--chat-toolbar-height", `${chatToolbar.offsetHeight}px`);
-    }
-    if (chatComposer) {
-      chatPage.style.setProperty("--chat-composer-height", `${chatComposer.offsetHeight}px`);
-    }
-    if (!chatToolbar || !chatComposer || !chatThread) {
+    if (!chatPage.classList.contains("has-chat-layout")) {
       return;
     }
-
+    const viewportHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
     const pageRect = chatPage.getBoundingClientRect();
-    const toolbarRect = chatToolbar.getBoundingClientRect();
-    const composerRect = chatComposer.getBoundingClientRect();
-    const computed = window.getComputedStyle(chatPage);
-    const sectionGap = Number.parseFloat(computed.getPropertyValue("--chat-section-gap")) || 0;
-    const threadTop = Math.max(0, toolbarRect.bottom - pageRect.top + sectionGap);
-    const threadBottomEdge = composerRect.top - pageRect.top - sectionGap;
-    const threadHeight = Math.max(120, threadBottomEdge - threadTop);
-
-    chatPage.style.setProperty("--chat-thread-top", `${threadTop}px`);
-    chatPage.style.setProperty("--chat-thread-height", `${threadHeight}px`);
-
-    if (mobileTabNav) {
-      const tabRect = mobileTabNav.getBoundingClientRect();
-      const composerBottom = Math.max(0, window.innerHeight - composerRect.bottom);
-      chatPage.style.setProperty("--chat-tab-height", `${Math.max(0, tabRect.height)}px`);
-      chatPage.style.setProperty("--chat-composer-bottom-live", `${composerBottom}px`);
-    }
+    const availableHeight = Math.max(220, viewportHeight - pageRect.top);
+    chatPage.style.height = `${availableHeight}px`;
   }
 
   function resizeComposerInput() {
