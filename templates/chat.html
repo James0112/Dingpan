@@ -238,6 +238,29 @@
     gap: 10px;
     text-align: center;
   }
+  .chat-suggestion-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 8px;
+    text-align: left;
+  }
+  .chat-suggestion-button {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 16px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    font: inherit;
+    text-align: left;
+    box-shadow: var(--shadow-soft);
+  }
+  .chat-suggestion-button span {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 12px;
+    margin-top: 4px;
+  }
   .chat-empty-card h2,
   .chat-empty-card p {
     margin: 0;
@@ -358,6 +381,28 @@
 
   <section class="chat-thread" id="chat-thread">
     {% if selected_conversation %}
+      {% if not selected_messages %}
+      <div class="chat-empty">
+        <div class="chat-empty-card">
+          <h2>从这份报告继续追问</h2>
+          <p>{% if selected_conversation.latest_trade_date %}当前基于 {{ selected_conversation.latest_trade_date }} 的共享分析{% else %}当前基于最新共享分析{% endif %}</p>
+          <div class="chat-suggestion-list">
+            <button class="chat-suggestion-button" type="button" data-chat-suggestion="结合我的持仓，明天最该关注什么？">
+              结合我的持仓，明天最该关注什么？
+              <span>从整体执行节奏切入</span>
+            </button>
+            <button class="chat-suggestion-button" type="button" data-chat-suggestion="当前技术面最关键的信号是什么？">
+              当前技术面最关键的信号是什么？
+              <span>先看最重要的技术判断</span>
+            </button>
+            <button class="chat-suggestion-button" type="button" data-chat-suggestion="{% if selected_stock and selected_stock.cost_price and selected_stock.cost_price > 0 %}我的持仓成本附近有哪些风险？{% else %}当前支撑位和压力位附近该怎么操作？{% endif %}">
+              {% if selected_stock and selected_stock.cost_price and selected_stock.cost_price > 0 %}我的持仓成本附近有哪些风险？{% else %}当前支撑位和压力位附近该怎么操作？{% endif %}
+              <span>{% if selected_stock and selected_stock.cost_price and selected_stock.cost_price > 0 %}结合你的成本位评估风险{% else %}围绕关键价位做追问{% endif %}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endif %}
       {% for item in selected_messages %}
       <article class="chat-message {{ item.role }}">
         <div class="chat-bubble {{ item.role }}">
@@ -622,6 +667,18 @@
       } catch (error) {
       }
       window.location.href = `/chat?stock_code=${encodeURIComponent(nextStockCode)}`;
+    });
+  });
+  document.querySelectorAll("[data-chat-suggestion]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!chatInput || chatInput.disabled) {
+        return;
+      }
+      chatInput.value = button.dataset.chatSuggestion || "";
+      resizeComposerInput();
+      chatInput.focus();
+      const nextPosition = chatInput.value.length;
+      chatInput.setSelectionRange(nextPosition, nextPosition);
     });
   });
 

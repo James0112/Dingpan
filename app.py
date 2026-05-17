@@ -1552,6 +1552,7 @@ async def _load_stock_chat_targets(user_id: int, model_id: str) -> list[dict[str
         SELECT
             s.stock_code,
             s.stock_name,
+            s.cost_price,
             c.id AS conversation_id,
             c.updated_at AS conversation_updated_at,
             success.trade_date AS latest_success_trade_date,
@@ -1605,6 +1606,7 @@ async def _load_stock_chat_targets(user_id: int, model_id: str) -> list[dict[str
             {
                 "stock_code": str(row["stock_code"] or ""),
                 "stock_name": str(row["stock_name"] or ""),
+                "cost_price": float(row["cost_price"] or 0.0),
                 "model_id": model_id,
                 "conversation_id": int(row["conversation_id"] or 0),
                 "latest_trade_date": latest_success_trade_date or latest_trade_date,
@@ -1676,7 +1678,7 @@ def _format_message_time_label(raw_value: str) -> str:
     return value
 
 
-async def _load_stock_chat_context(stock_code: str, model_id: str) -> str:
+async def _load_stock_chat_context(stock_code: str, model_id: str) -> dict[str, str]:
     row = await fetch_one(
         settings.db_path,
         """
@@ -1689,26 +1691,30 @@ async def _load_stock_chat_context(stock_code: str, model_id: str) -> str:
         (stock_code, model_id),
     )
     if row is None:
-        return ""
+        return {"trade_date": "", "prompt_context": ""}
     market_data = market_data_from_json(str(row["market_data_json"]))
     analysis = analysis_result_from_json(str(row["analysis_json"]))
     stock_name = str(row["stock_name"] or market_data.stock_name or stock_code)
-    return "\n".join(
-        [
-            f"股票：{stock_name}（{stock_code}）",
-            f"交易日：{row['trade_date']}",
-            f"收盘价：{market_data.snapshot.close_price:.2f}",
-            f"涨跌幅：{market_data.snapshot.change_pct:+.2f}%",
-            f"共享结论：{analysis.general_summary}",
-            f"技术分析：{analysis.technical_analysis}",
-            f"资金面：{analysis.fund_flow_analysis}",
-            f"消息面：{analysis.news_impact}",
-            f"方向判断：{analysis.bias}",
-            f"支撑位：{analysis.support_price:.2f}",
-            f"压力位：{analysis.resistance_price:.2f}",
-            f"风险提示：{'；'.join(analysis.risk_notes[:3])}",
-        ]
-    )
+    trade_date = str(row["trade_date"] or "")
+    return {
+        "trade_date": trade_date,
+        "prompt_context": "\n".join(
+            [
+                f"股票：{stock_name}（{stock_code}）",
+                f"交易日：{trade_date}",
+                f"收盘价：{market_data.snapshot.close_price:.2f}",
+                f"涨跌幅：{market_data.snapshot.change_pct:+.2f}%",
+                f"共享结论：{analysis.general_summary}",
+                f"技术分析：{analysis.technical_analysis}",
+                f"资金面：{analysis.fund_flow_analysis}",
+                f"消息面：{analysis.news_impact}",
+                f"方向判断：{analysis.bias}",
+                f"支撑位：{analysis.support_price:.2f}",
+                f"压力位：{analysis.resistance_price:.2f}",
+                f"风险提示：{'；'.join(analysis.risk_notes[:3])}",
+            ]
+        ),
+    }
 
 
 @app.get("/chat", response_class=HTMLResponse)
@@ -1727,6 +1733,7 @@ async def chat_page(request: Request, stock: str = "", stock_code: str = "", use
 
     selected_conversation = None
     selected_messages: list[dict[str, object]] = []
+    selected_chat_context: dict[str, str] = {"trade_date": "", "prompt_context": ""}
     selected_stock = next((item for item in stocks if str(item["stock_code"]) == selected_stock_code), None)
     if selected_stock is not None and str(selected_stock["status"]) == "ready":
         conversation_id = int(selected_stock["conversation_id"] or 0)
@@ -1738,13 +1745,14 @@ async def chat_page(request: Request, stock: str = "", stock_code: str = "", use
                 stock_name=str(selected_stock["stock_name"] or ""),
             )
             selected_stock["conversation_id"] = conversation_id
+        selected_chat_context = await _load_stock_chat_context(str(selected_stock["stock_code"]), user.preferred_model)
         selected_conversation = {
             "id": conversation_id,
             "model_id": user.preferred_model,
             "stock_code": str(selected_stock["stock_code"]),
             "stock_name": str(selected_stock["stock_name"] or ""),
             "title": f"{selected_stock['stock_name'] or selected_stock['stock_code']} 对话",
-            "latest_trade_date": str(selected_stock["latest_trade_date"] or ""),
+            "latest_trade_date": str(selected_chat_context["trade_date"] or selected_stock["latest_trade_date"] or ""),
         }
         selected_messages = await _load_conversation_messages(conversation_id)
     return templates.TemplateResponse(
@@ -1758,6 +1766,7 @@ async def chat_page(request: Request, stock: str = "", stock_code: str = "", use
             selected_stock=selected_stock,
             selected_conversation=selected_conversation,
             selected_messages=selected_messages,
+            selected_chat_context=selected_chat_context,
             stock_query_present=bool(requested_stock),
         ),
     )
@@ -2231,7 +2240,8 @@ async def conversation_message_create(conversation_id: int, payload: Conversatio
         (conversation_id,),
     )
     history = [{"role": str(row["role"]), "content": str(row["content"])} for row in history_rows]
-    shared_context = await _load_stock_chat_context(str(conversation_row["stock_code"] or ""), str(conversation_row["model_id"]))
+    shared_context_payload = await _load_stock_chat_context(str(conversation_row["stock_code"] or ""), str(conversation_row["model_id"]))
+    shared_context = shared_context_payload["prompt_context"]
 
     try:
         output = await run_in_threadpool(
