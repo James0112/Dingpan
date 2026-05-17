@@ -288,6 +288,9 @@
   .settings-item-head.password-row {
     align-items: center;
   }
+  .page-end-spacer {
+    display: none;
+  }
   @media (max-width: 640px) {
     body.model-sheet-open {
       overflow: hidden;
@@ -338,6 +341,11 @@
       padding-right: 2px;
       padding-bottom: calc(18px + var(--safe-area-bottom));
       -webkit-overflow-scrolling: touch;
+    }
+    .page-end-spacer {
+      display: block;
+      height: calc(var(--page-bottom-safe-spacing) + 40px);
+      flex: 0 0 auto;
     }
   }
 </style>
@@ -563,6 +571,7 @@
     </article>
   </section>
 </div>
+<div class="page-end-spacer" aria-hidden="true"></div>
 
 <script>
   const userVerified = {% if user.email_verified_at %}true{% else %}false{% endif %};

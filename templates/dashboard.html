@@ -227,6 +227,9 @@
     font-size: 14px;
     line-height: 1.7;
   }
+  .page-end-spacer {
+    display: none;
+  }
   @media (min-width: 900px) {
     .watch-layout {
       grid-template-columns: minmax(0, 1fr) 320px;
@@ -260,6 +263,11 @@
       display: block;
       margin-top: auto;
       padding-top: 16px;
+    }
+    .page-end-spacer {
+      display: block;
+      height: calc(var(--page-bottom-safe-spacing) + 32px);
+      flex: 0 0 auto;
     }
     .modal-backdrop[data-dialog-mode="desktop"] {
       display: none !important;
@@ -416,6 +424,7 @@
   </section>
   {% endif %}
 </div>
+<div class="page-end-spacer" aria-hidden="true"></div>
 
 {% if subscriptions %}
 <div class="modal-backdrop" id="add-stock-sheet" data-dialog-mode="mobile" hidden>
