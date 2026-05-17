@@ -1553,23 +1553,33 @@ async def _load_stock_chat_targets(user_id: int, model_id: str) -> list[dict[str
             s.stock_name,
             c.id AS conversation_id,
             c.updated_at AS conversation_updated_at,
-            latest.trade_date AS latest_trade_date,
-            latest.status AS latest_status
+            success.trade_date AS latest_success_trade_date,
+            latest_any.trade_date AS latest_trade_date,
+            latest_any.status AS latest_status
         FROM subscriptions s
         LEFT JOIN conversations c
             ON c.user_id = s.user_id
            AND c.model_id = s.model_id
            AND c.stock_code = s.stock_code
            AND c.conversation_type = 'stock'
-        LEFT JOIN analysis_cache latest
-            ON latest.stock_code = s.stock_code
-           AND latest.model_id = s.model_id
-           AND latest.trade_date = (
+        LEFT JOIN analysis_cache success
+            ON success.stock_code = s.stock_code
+           AND success.model_id = s.model_id
+           AND success.trade_date = (
                SELECT MAX(ac2.trade_date)
                FROM analysis_cache ac2
                WHERE ac2.stock_code = s.stock_code
                  AND ac2.model_id = s.model_id
                  AND ac2.status = 'success'
+           )
+        LEFT JOIN analysis_cache latest_any
+            ON latest_any.stock_code = s.stock_code
+           AND latest_any.model_id = s.model_id
+           AND latest_any.trade_date = (
+               SELECT MAX(ac3.trade_date)
+               FROM analysis_cache ac3
+               WHERE ac3.stock_code = s.stock_code
+                 AND ac3.model_id = s.model_id
            )
         WHERE s.user_id = ? AND s.is_active = 1 AND s.model_id = ?
         ORDER BY s.sort_order ASC, s.id ASC
@@ -1578,16 +1588,25 @@ async def _load_stock_chat_targets(user_id: int, model_id: str) -> list[dict[str
     )
     targets: list[dict[str, object]] = []
     for row in rows:
+        latest_success_trade_date = str(row["latest_success_trade_date"] or "")
         latest_trade_date = str(row["latest_trade_date"] or "")
-        status = "ready" if latest_trade_date else "disabled"
-        status_label = "有报告" if latest_trade_date else "暂不可用"
+        latest_status = str(row["latest_status"] or "").strip().lower()
+        if latest_success_trade_date:
+            status = "ready"
+            status_label = "可对话"
+        elif latest_status in {"pending", "running"}:
+            status = "generating"
+            status_label = "报告生成中"
+        else:
+            status = "disabled"
+            status_label = "暂无报告"
         targets.append(
             {
                 "stock_code": str(row["stock_code"] or ""),
                 "stock_name": str(row["stock_name"] or ""),
                 "model_id": model_id,
                 "conversation_id": int(row["conversation_id"] or 0),
-                "latest_trade_date": latest_trade_date,
+                "latest_trade_date": latest_success_trade_date or latest_trade_date,
                 "status": status,
                 "status_label": status_label,
                 "conversation_updated_at": str(row["conversation_updated_at"] or ""),
@@ -1603,7 +1622,7 @@ async def _load_or_create_stock_conversation(*, user_id: int, model_id: str, sto
         SELECT id
         FROM conversations
         WHERE user_id = ? AND model_id = ? AND stock_code = ? AND conversation_type = 'stock'
-        ORDER BY id DESC
+        ORDER BY updated_at DESC, id DESC
         LIMIT 1
         """,
         (user_id, model_id, stock_code),
@@ -1683,18 +1702,18 @@ async def _load_stock_chat_context(stock_code: str, model_id: str) -> str:
 
 
 @app.get("/chat", response_class=HTMLResponse)
-async def chat_page(request: Request, stock_code: str = "", user=Depends(page_user_or_redirect)):
+async def chat_page(request: Request, stock: str = "", stock_code: str = "", user=Depends(page_user_or_redirect)):
     if user is None:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     if not user.email_verified_at:
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
     stocks = await _load_stock_chat_targets(user.id, user.preferred_model)
-    selected_stock_code = _normalize_stock_code(stock_code) if stock_code.strip() else ""
-    enabled_stock_codes = {str(item["stock_code"]) for item in stocks if str(item["status"]) == "ready"}
-    if selected_stock_code and selected_stock_code not in enabled_stock_codes:
+    requested_stock = stock.strip() or stock_code.strip()
+    selected_stock_code = _normalize_stock_code(requested_stock) if requested_stock else ""
+    if selected_stock_code and not any(str(item["stock_code"]) == selected_stock_code for item in stocks):
         selected_stock_code = ""
     if not selected_stock_code and stocks:
-        selected_stock_code = next((str(item["stock_code"]) for item in stocks if str(item["status"]) == "ready"), str(stocks[0]["stock_code"]))
+        selected_stock_code = next((str(item["stock_code"]) for item in stocks if str(item["status"]) == "ready"), "")
 
     selected_conversation = None
     selected_messages: list[dict[str, object]] = []
@@ -1729,23 +1748,8 @@ async def chat_page(request: Request, stock_code: str = "", user=Depends(page_us
             selected_stock=selected_stock,
             selected_conversation=selected_conversation,
             selected_messages=selected_messages,
-            stock_query_present=bool(stock_code.strip()),
+            stock_query_present=bool(requested_stock),
         ),
-    )
-
-
-@app.get("/chat/{conversation_id}", response_class=HTMLResponse)
-async def chat_detail_page(request: Request, conversation_id: int, user=Depends(page_user_or_redirect)):
-    if user is None:
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-    if not user.email_verified_at:
-        return RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-    conversation_row = await _load_conversation_row(user.id, conversation_id)
-    if conversation_row is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
-    return RedirectResponse(
-        url=f"/chat?stock_code={conversation_row['stock_code']}",
-        status_code=status.HTTP_302_FOUND,
     )
 
 
@@ -2150,25 +2154,20 @@ async def conversation_create(payload: ConversationCreatePayload, user=Depends(v
         """
         SELECT s.stock_code, s.stock_name
         FROM subscriptions s
-        LEFT JOIN analysis_cache ac
-            ON ac.stock_code = s.stock_code
-           AND ac.model_id = s.model_id
-           AND ac.status = 'success'
         WHERE s.user_id = ? AND s.stock_code = ? AND s.is_active = 1 AND s.model_id = ?
-        ORDER BY ac.trade_date DESC
         LIMIT 1
         """,
         (user.id, stock_code, user.preferred_model),
     )
     if subscription is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前模型下该股票还没有可用共享分析")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="该股票不在当前模型的自选列表中")
     conversation_id = await _load_or_create_stock_conversation(
         user_id=user.id,
         model_id=user.preferred_model,
         stock_code=stock_code,
         stock_name=str(subscription["stock_name"] or stock_code),
     )
-    return {"ok": True, "conversation_id": conversation_id, "url": f"/chat?stock_code={stock_code}"}
+    return {"ok": True, "conversation_id": conversation_id, "url": f"/chat?stock={stock_code}"}
 
 
 @app.get("/api/conversations/{conversation_id}")

@@ -287,14 +287,21 @@ async def _ensure_schema_migrations(conn: aiosqlite.Connection) -> None:
     await conn.execute("UPDATE usage_log SET model_id = 'glm' WHERE model_id = 'glm4'")
     await conn.execute(
         """
-        DELETE FROM conversations
-        WHERE conversation_type = 'stock'
-          AND stock_code <> ''
-          AND id NOT IN (
-              SELECT MAX(id)
-              FROM conversations
-              WHERE conversation_type = 'stock' AND stock_code <> ''
-              GROUP BY user_id, model_id, stock_code
+        DELETE FROM conversations AS current
+        WHERE current.conversation_type = 'stock'
+          AND current.stock_code <> ''
+          AND EXISTS (
+              SELECT 1
+              FROM conversations AS newer
+              WHERE newer.conversation_type = 'stock'
+                AND newer.stock_code <> ''
+                AND newer.user_id = current.user_id
+                AND newer.model_id = current.model_id
+                AND newer.stock_code = current.stock_code
+                AND (
+                    newer.updated_at > current.updated_at
+                    OR (newer.updated_at = current.updated_at AND newer.id > current.id)
+                )
           )
         """
     )

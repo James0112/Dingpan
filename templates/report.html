@@ -506,26 +506,10 @@
   }
 
   if (openStockChatButton) {
-    openStockChatButton.addEventListener("click", async () => {
+    openStockChatButton.addEventListener("click", () => {
       openStockChatButton.disabled = true;
       openStockChatButton.textContent = "进入中...";
-      const response = await fetch("/api/conversations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          stock_code: "{{ market_data.stock_code }}"
-        })
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        openStockChatButton.disabled = false;
-        openStockChatButton.textContent = data.detail || "进入失败";
-        window.setTimeout(() => {
-          openStockChatButton.textContent = "进入股票对话";
-        }, 1500);
-        return;
-      }
-      window.location.href = data.url;
+      window.location.href = `/chat?stock={{ market_data.stock_code }}`;
     });
   }
 
