@@ -40,6 +40,8 @@
     --chat-toolbar-height: 74px;
     --chat-composer-height: 68px;
     --chat-composer-bottom: calc(var(--page-bottom-spacing) + 6px);
+    --chat-thread-top: 96px;
+    --chat-thread-height: 240px;
   }
   .chat-toolbar {
     position: absolute;
@@ -166,10 +168,10 @@
   }
   .chat-thread {
     position: absolute;
-    top: calc(var(--chat-toolbar-top) + var(--chat-toolbar-height) + var(--chat-section-gap));
+    top: var(--chat-thread-top);
     right: var(--chat-side-gap);
-    bottom: calc(var(--chat-composer-height) + var(--chat-composer-bottom) + var(--chat-section-gap));
     left: var(--chat-side-gap);
+    height: var(--chat-thread-height);
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
@@ -187,9 +189,6 @@
   }
   body.keyboard-open .chat-page.has-chat-layout {
     --chat-composer-bottom: calc(var(--viewport-bottom-offset) + 2px);
-  }
-  body.keyboard-open .chat-thread {
-    bottom: calc(var(--chat-composer-height) + var(--chat-composer-bottom) + 6px);
   }
   .chat-thread::-webkit-scrollbar {
     width: 0;
@@ -444,6 +443,7 @@
   const CHAT_LAST_STOCK_KEY = "last_chat_stock_code";
   const chatPage = document.getElementById("chat-page-root");
   const chatToolbar = document.querySelector(".chat-toolbar");
+  const mobileTabNav = document.querySelector(".mobile-tab-nav");
   const stockTrigger = document.getElementById("chat-stock-trigger");
   const stockMenu = document.getElementById("chat-stock-menu");
   const stockBackdrop = document.getElementById("chat-stock-backdrop");
@@ -484,6 +484,28 @@
     }
     if (chatComposer) {
       chatPage.style.setProperty("--chat-composer-height", `${chatComposer.offsetHeight}px`);
+    }
+    if (!chatToolbar || !chatComposer || !chatThread) {
+      return;
+    }
+
+    const pageRect = chatPage.getBoundingClientRect();
+    const toolbarRect = chatToolbar.getBoundingClientRect();
+    const composerRect = chatComposer.getBoundingClientRect();
+    const computed = window.getComputedStyle(chatPage);
+    const sectionGap = Number.parseFloat(computed.getPropertyValue("--chat-section-gap")) || 0;
+    const threadTop = Math.max(0, toolbarRect.bottom - pageRect.top + sectionGap);
+    const threadBottomEdge = composerRect.top - pageRect.top - sectionGap;
+    const threadHeight = Math.max(120, threadBottomEdge - threadTop);
+
+    chatPage.style.setProperty("--chat-thread-top", `${threadTop}px`);
+    chatPage.style.setProperty("--chat-thread-height", `${threadHeight}px`);
+
+    if (mobileTabNav) {
+      const tabRect = mobileTabNav.getBoundingClientRect();
+      const composerBottom = Math.max(0, window.innerHeight - composerRect.bottom);
+      chatPage.style.setProperty("--chat-tab-height", `${Math.max(0, tabRect.height)}px`);
+      chatPage.style.setProperty("--chat-composer-bottom-live", `${composerBottom}px`);
     }
   }
 
@@ -594,6 +616,14 @@
   }
 
   window.addEventListener("resize", syncChatChromeHeights);
+  document.addEventListener("focusin", syncChatChromeHeights);
+  document.addEventListener("focusout", () => {
+    window.setTimeout(syncChatChromeHeights, 140);
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", syncChatChromeHeights);
+    window.visualViewport.addEventListener("scroll", syncChatChromeHeights);
+  }
 
   if (chatForm && chatInput && chatSubmit && chatForm.dataset.conversationId) {
     chatForm.addEventListener("submit", async (event) => {
