@@ -191,7 +191,7 @@
     flex-direction: column;
     gap: 6px;
     max-width: min(100%, 760px);
-    padding: 14px 16px;
+    padding: 10px 16px;
     border-radius: 18px;
     border: 1px solid var(--border-color);
     background: var(--bg-elevated);
@@ -348,8 +348,11 @@
       {% for item in selected_messages %}
       <article class="chat-bubble {{ item.role }}">
         <div>{{ item.content }}</div>
-        {% if item.role == "assistant" and item.actual_model_name %}
-        <div class="chat-bubble-meta">{{ item.actual_model_name }}</div>
+        {% if item.created_at or (item.role == "assistant" and item.actual_model_name) %}
+        <div class="chat-bubble-meta">
+          {% if item.created_at %}<span>{{ item.created_at[11:16] }}</span>{% endif %}
+          {% if item.role == "assistant" and item.actual_model_name %}<span>{{ item.actual_model_name }}</span>{% endif %}
+        </div>
         {% endif %}
       </article>
       {% endfor %}
@@ -453,6 +456,25 @@
       return;
     }
     chatThread.scrollTo({ top: chatThread.scrollHeight, behavior: behavior || "auto" });
+  }
+
+  function formatMessageTime(rawValue) {
+    if (!rawValue) {
+      const now = new Date();
+      return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    }
+    const value = String(rawValue).trim();
+    if (!value) {
+      return "";
+    }
+    if (value.length >= 16 && value[10] === " ") {
+      return value.slice(11, 16);
+    }
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return `${String(parsed.getHours()).padStart(2, "0")}:${String(parsed.getMinutes()).padStart(2, "0")}`;
+    }
+    return value;
   }
 
   function captureChatViewportBaseline(force) {
@@ -586,10 +608,20 @@
     copy.textContent = content;
     bubble.appendChild(copy);
 
-    if (role === "assistant" && actualModelName) {
+    const timeLabel = formatMessageTime(options && options.createdAt ? options.createdAt : "");
+    if (timeLabel || (role === "assistant" && actualModelName)) {
       const meta = document.createElement("div");
       meta.className = "chat-bubble-meta";
-      meta.textContent = actualModelName;
+      if (timeLabel) {
+        const time = document.createElement("span");
+        time.textContent = timeLabel;
+        meta.appendChild(time);
+      }
+      if (role === "assistant" && actualModelName) {
+        const model = document.createElement("span");
+        model.textContent = actualModelName;
+        meta.appendChild(model);
+      }
       bubble.appendChild(meta);
     }
 
@@ -660,7 +692,7 @@
         return;
       }
 
-      appendBubble("user", content, "");
+      appendBubble("user", content, "", { createdAt: new Date().toISOString() });
       chatInput.value = "";
       resizeComposerInput();
       chatInput.disabled = true;
@@ -669,7 +701,7 @@
       chatFormMessage.textContent = "";
       chatFormMessage.classList.remove("is-error");
       clearPendingAssistantBubble();
-      pendingAssistantBubble = appendBubble("assistant", "正在生成...", "", { pending: true });
+      pendingAssistantBubble = appendBubble("assistant", "正在生成...", "", { pending: true, createdAt: new Date().toISOString() });
 
       const response = await fetch(`/api/conversations/${chatForm.dataset.conversationId}/messages`, {
         method: "POST",
@@ -689,7 +721,9 @@
         return;
       }
 
-      appendBubble("assistant", data.assistant_message.content, data.assistant_message.actual_model_name || "");
+      appendBubble("assistant", data.assistant_message.content, data.assistant_message.actual_model_name || "", {
+        createdAt: data.assistant_message.created_at || ""
+      });
       chatFormMessage.textContent = "";
       chatFormMessage.classList.remove("is-error");
       chatInput.focus();

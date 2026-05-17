@@ -1666,6 +1666,15 @@ async def _load_conversation_messages(conversation_id: int) -> list[dict[str, ob
     ]
 
 
+def _format_message_time_label(raw_value: str) -> str:
+    value = raw_value.strip()
+    if not value:
+        return ""
+    if len(value) >= 16:
+        return value[11:16]
+    return value
+
+
 async def _load_stock_chat_context(stock_code: str, model_id: str) -> str:
     row = await fetch_one(
         settings.db_path,
@@ -2253,6 +2262,15 @@ async def conversation_message_create(conversation_id: int, payload: Conversatio
             output.provider_response_id,
         ),
     )
+    assistant_message_row = await fetch_one(
+        settings.db_path,
+        """
+        SELECT created_at
+        FROM messages
+        WHERE id = ? AND conversation_id = ?
+        """,
+        (assistant_message_id, conversation_id),
+    )
     title = str(conversation_row["title"] or "").strip()
     if not title or title.endswith("对话"):
         title = output.result.title.strip() or _conversation_title_fallback(content, str(conversation_row["stock_code"] or ""))
@@ -2276,6 +2294,8 @@ async def conversation_message_create(conversation_id: int, payload: Conversatio
             "actual_provider": output.actual_provider,
             "actual_model_name": output.actual_model_name,
             "provider_response_id": output.provider_response_id,
+            "created_at": str(assistant_message_row["created_at"] or "") if assistant_message_row else "",
+            "created_at_label": _format_message_time_label(str(assistant_message_row["created_at"] or "")) if assistant_message_row else "",
         },
     }
 
