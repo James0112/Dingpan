@@ -28,8 +28,6 @@
   }
   .chat-page {
     position: relative;
-    display: flex;
-    flex-direction: column;
     flex: 1 1 0%;
     height: 100%;
     min-height: 0;
@@ -39,8 +37,16 @@
     box-shadow: var(--shadow-soft);
     overflow: hidden;
   }
+  .chat-page.has-chat-layout {
+    --chat-toolbar-height: 120px;
+    --chat-composer-height: 96px;
+    --chat-bottom-offset: calc(var(--page-bottom-spacing) + 8px);
+  }
   .chat-toolbar {
-    position: relative;
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
     z-index: 3;
     padding: 16px;
     border-bottom: 1px solid var(--border-color);
@@ -82,6 +88,12 @@
     color: var(--text-muted);
     font-size: 20px;
     line-height: 1;
+  }
+  .chat-toolbar-note {
+    min-height: 18px;
+    margin-top: 10px;
+    color: var(--text-muted);
+    font-size: 13px;
   }
   .chat-stock-backdrop {
     position: fixed;
@@ -150,8 +162,11 @@
     font-size: 12px;
   }
   .chat-thread {
-    flex: 1 1 0%;
-    min-height: 0;
+    position: absolute;
+    top: var(--chat-toolbar-height);
+    right: 0;
+    bottom: calc(var(--chat-composer-height) + var(--chat-bottom-offset));
+    left: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
@@ -213,7 +228,11 @@
     line-height: 1.7;
   }
   .chat-composer {
-    flex: 0 0 auto;
+    position: absolute;
+    right: 0;
+    bottom: var(--chat-bottom-offset);
+    left: 0;
+    z-index: 3;
     display: grid;
     gap: 10px;
     padding: 12px 16px calc(12px + var(--safe-area-bottom));
@@ -290,10 +309,10 @@
   }
 </style>
 
-{% set has_ready_stock = stocks | selectattr("status", "equalto", "ready") | list | length > 0 %}
+  {% set has_ready_stock = stocks | selectattr("status", "equalto", "ready") | list | length > 0 %}
 {% set show_chat_layout = selected_stock or has_ready_stock %}
 
-<div class="chat-page">
+<div class="chat-page{% if show_chat_layout %} has-chat-layout{% endif %}" id="chat-page-root">
   {% if show_chat_layout %}
   <section class="chat-toolbar">
     <button class="chat-stock-trigger" type="button" id="chat-stock-trigger" {% if not stocks %}disabled{% endif %}>
@@ -307,6 +326,7 @@
       </div>
       <span class="chat-stock-caret" aria-hidden="true">▾</span>
     </button>
+    <div class="chat-toolbar-note" id="chat-page-message" aria-live="polite"></div>
     <div class="chat-stock-menu" id="chat-stock-menu" hidden>
       <div class="chat-stock-menu-list">
         {% for item in stocks %}
@@ -384,6 +404,8 @@
 
 <script>
   const CHAT_LAST_STOCK_KEY = "last_chat_stock_code";
+  const chatPage = document.getElementById("chat-page-root");
+  const chatToolbar = document.querySelector(".chat-toolbar");
   const stockTrigger = document.getElementById("chat-stock-trigger");
   const stockMenu = document.getElementById("chat-stock-menu");
   const stockBackdrop = document.getElementById("chat-stock-backdrop");
@@ -391,6 +413,7 @@
   const chatForm = document.getElementById("chat-form");
   const chatFormMessage = document.getElementById("chat-form-message");
   const chatThread = document.getElementById("chat-thread");
+  const chatComposer = document.querySelector(".chat-composer");
   const chatInput = document.getElementById("chat-input");
   const chatSubmit = document.getElementById("chat-submit");
   const selectedStockCode = "{{ selected_stock.stock_code if selected_stock else '' }}";
@@ -414,6 +437,18 @@
     chatThread.scrollTo({ top: chatThread.scrollHeight, behavior: behavior || "auto" });
   }
 
+  function syncChatChromeHeights() {
+    if (!chatPage) {
+      return;
+    }
+    if (chatToolbar) {
+      chatPage.style.setProperty("--chat-toolbar-height", `${chatToolbar.offsetHeight}px`);
+    }
+    if (chatComposer) {
+      chatPage.style.setProperty("--chat-composer-height", `${chatComposer.offsetHeight}px`);
+    }
+  }
+
   function resizeComposerInput() {
     if (!chatInput) {
       return;
@@ -421,6 +456,7 @@
     chatInput.style.height = "48px";
     const nextHeight = Math.min(chatInput.scrollHeight, 144);
     chatInput.style.height = `${Math.max(48, nextHeight)}px`;
+    syncChatChromeHeights();
   }
 
   if (!stockQueryPresent && readyStockCodes.length > 0) {
@@ -496,6 +532,7 @@
   }
 
   if (chatThread) {
+    syncChatChromeHeights();
     scrollThreadToBottom("auto");
   }
 
@@ -505,6 +542,20 @@
       resizeComposerInput();
     });
   }
+
+  if (typeof ResizeObserver !== "undefined") {
+    const resizeObserver = new ResizeObserver(() => {
+      syncChatChromeHeights();
+    });
+    if (chatToolbar) {
+      resizeObserver.observe(chatToolbar);
+    }
+    if (chatComposer) {
+      resizeObserver.observe(chatComposer);
+    }
+  }
+
+  window.addEventListener("resize", syncChatChromeHeights);
 
   if (chatForm && chatInput && chatSubmit && chatForm.dataset.conversationId) {
     chatForm.addEventListener("submit", async (event) => {
